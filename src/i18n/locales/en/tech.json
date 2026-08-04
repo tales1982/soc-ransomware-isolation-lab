@@ -1,0 +1,83 @@
+{
+  "title": "Technologies",
+  "subtitle": "Every tool here was chosen for a reason and pushed hard enough to find its real limits.",
+  "core": {
+    "title": "The core stack",
+    "items": [
+      {
+        "id": "wazuh",
+        "name": "Wazuh",
+        "tagline": "SIEM / XDR — the brain of the lab",
+        "description": "Open-source SIEM that centralizes logs from every endpoint, runs File Integrity Monitoring, correlates events into rules, tracks CVEs against installed packages, and triggers Active Response automation. Everything else in this lab either feeds Wazuh or reacts to it.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "suricata",
+        "name": "Suricata",
+        "tagline": "Network IDS/IPS — deployed 8 times, not once",
+        "description": "Signature-based network intrusion detection. Started as a single sensor on the SIEM server, which turned out to have a real architectural blind spot — traffic between two other LAN machines was invisible to it. Fixed by installing an independent sensor on every single machine instead of relying on port mirroring.",
+        "hasDeepDive": true,
+        "deepDiveLabel": "See the full story on the Wazuh page"
+      },
+      {
+        "id": "thehive",
+        "name": "TheHive",
+        "tagline": "Case management / SOAR",
+        "description": "Where alerts become investigations. Every Wazuh alert at level 7 or above is pushed here automatically via a custom integration script, and four case templates standardize how a port scan, a brute-force attempt, a ransomware event, or a CVE gets triaged.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "cortex",
+        "name": "Cortex",
+        "tagline": "Observable enrichment engine",
+        "description": "Paired with TheHive: takes an IP, hash, or domain from a case and automatically queries AbuseIPDB and VirusTotal for reputation data. Getting this working inside Docker-in-Docker was one of the deepest debugging sessions in the whole project.",
+        "hasDeepDive": true
+      }
+    ]
+  },
+  "supporting": {
+    "title": "Supporting cast",
+    "items": [
+      {
+        "name": "Sysmon",
+        "description": "Deep Windows telemetry (process creation, network connections, registry changes) feeding Wazuh from the two Windows endpoints — the Windows-side equivalent of auditd."
+      },
+      {
+        "name": "auditd",
+        "description": "Linux kernel-level audit logging — identity changes, privilege escalation, SSH config changes, and the File Integrity Monitoring watch on the simulated media storage path."
+      },
+      {
+        "name": "Emerging Threats Open",
+        "description": "The signature ruleset Suricata runs against — roughly 52,000 rules on the Linux sensors, tuned down with a custom rule to cut through home-network IoT broadcast noise."
+      },
+      {
+        "name": "Python 3",
+        "description": "A dedicated automation engine (isolated in its own venv) implementing the isolate → fail over → forensic-report chain, plus the latency-measurement harness used for the experimental results on this site."
+      },
+      {
+        "name": "Ansible",
+        "description": "Orchestrates the Linux endpoints over SSH — the foundation the isolation/failover automation was built on top of."
+      },
+      {
+        "name": "containerlab + FRRouting",
+        "description": "A virtual network topology (one router, two storage nodes) used to simulate network-equipment-level isolation via docker exec + iptables, after the target router image turned out to expose neither SSH nor NETCONF."
+      },
+      {
+        "name": "Samba",
+        "description": "File-sharing service simulating the media storage node's ingest/live/archive/quarantine folder structure."
+      },
+      {
+        "name": "Ubuntu Pro / ESM",
+        "description": "Free-for-personal-use extended security maintenance — used to patch 9 CVEs across freerdp2, ffmpeg and cJSON that had no fix in the standard Ubuntu 24.04 channel."
+      },
+      {
+        "name": "VirtualBox",
+        "description": "Hypervisor running every VM in the lab: both Windows endpoints, one of the two Kali boxes, and the dedicated TheHive/Cortex server."
+      },
+      {
+        "name": "Docker / Docker Compose",
+        "description": "Runs the entire TheHive + Cortex + Cassandra + Elasticsearch stack, plus the containerlab virtual topology and the isolation/failover simulation."
+      }
+    ]
+  }
+}

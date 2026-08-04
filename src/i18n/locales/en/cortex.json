@@ -1,0 +1,48 @@
+{
+  "title": "Cortex",
+  "subtitle": "Observable enrichment — turning a bare IP address into a reputation score.",
+  "intro": [
+    { "type": "p", "text": "Cortex sits next to TheHive and does one job: given an observable (an IP, a hash, a domain, a URL) attached to a case, run it through one or more \"analyzers\" — small workers that query an external or local intelligence source and return a structured verdict." },
+    { "type": "p", "text": "Two analyzers are wired up in this lab: AbuseIPDB (IP reputation) and VirusTotal_GetReport (multi-engine reputation for IPs, hashes, domains and URLs) — both free-tier services, both requiring their own API key from a personal account." }
+  ],
+  "sections": [
+    {
+      "id": "enabling-analyzers",
+      "title": "Getting an analyzer to actually run",
+      "blocks": [
+        { "type": "p", "text": "This isn't a single step, and the UI doesn't make that obvious." },
+        { "type": "ol", "items": [
+          "Enable the full analyzer catalog first: Cortex's application.conf needs an analyzer.urls entry pointing at the official manifest (https://download.thehive-project.org/analyzers.json), plus job.runners set to allow the Docker runner — without this, the analyzer list is empty.",
+          "Configure the credentials: Organization → Analyzers Config → find the analyzer block (AbuseIPDB, VirusTotal) → Edit → paste the API key. This alone does not enable the analyzer.",
+          "Actually enable it: Organization → Analyzers (a separate tab from Config) → search the specific versioned entry (AbuseIPDB_2_0, VirusTotal_GetReport_3_1) in a 277-entry catalog → click \"+ Enable\". Only after this does it appear as a selectable option on New Analysis."
+        ]},
+        { "type": "callout", "variant": "warning", "text": "Filling in an API key and never clicking \"+ Enable\" is a completely silent failure — the analyzer just never shows up as an option, with no error message pointing at why." }
+      ]
+    },
+    {
+      "id": "docker-in-docker",
+      "title": "The Docker-in-Docker debugging saga",
+      "blocks": [
+        { "type": "p", "text": "Both analyzers were correctly configured and enabled, and every test run still failed with the exact same symptom: an empty JSON-decode error, `input: null`. No analyzer container ever appeared in `docker ps -a` — meaning the failure happened before Cortex even asked Docker to run anything." },
+        { "type": "h3", "text": "Root cause: Cortex mounts the host's real Docker socket" },
+        { "type": "p", "text": "Cortex runs the \"docker\" job runner by asking the host's own dockerd (via the mounted /var/run/docker.sock) to spawn a sibling analyzer container — not a nested Docker daemon inside its own container. That means any path Cortex tells Docker to bind-mount has to be a path that exists on the real host, identical on both sides. A job-working-directory path that only exists inside Cortex's own container filesystem is meaningless to the host's Docker daemon." },
+        { "type": "h3", "text": "Fix, attempt 1: bind-mount the same path on both sides" },
+        { "type": "code", "code": "volumes:\n  - /home/thehive/thehive-stack/cortex-jobs:/home/thehive/thehive-stack/cortex-jobs" },
+        { "type": "p", "text": "Still failed — same symptom, slightly different error text (now just the raw job-directory path, no traceback)." },
+        { "type": "h3", "text": "Fix, attempt 2: the config key was silently wrong" },
+        { "type": "p", "text": "Reading Cortex's own bundled reference.conf inside the image (rather than guessing) revealed two real mistakes:" },
+        { "type": "ul", "items": [
+          "The correct key is `job.runners` (plural). `job.runner` — the first, very reasonable guess — is a key that simply doesn't exist, and HOCON silently ignores unknown keys instead of erroring. It had zero effect the whole time.",
+          "A separate key, `job.dockerDirectory`, distinct from `job.directory`, is what actually controls the host-side bind-mount path used for spawned analyzer containers."
+        ]},
+        { "type": "code", "lang": "hocon", "code": "job {\n  runners = [docker]\n  directory = \"/home/thehive/thehive-stack/cortex-jobs\"\n  dockerDirectory = \"/home/thehive/thehive-stack/cortex-jobs\"\n}" },
+        { "type": "p", "text": "Corrected, restarted — same failure again. Closer, but not fixed yet." },
+        { "type": "h3", "text": "The real root cause: a UID mismatch" },
+        { "type": "p", "text": "Inspecting the actual running Java process inside the Cortex container (not the shell used to `docker exec` in, which defaults to root and hides permission problems) showed it running as UID 1001. The shared host folder, created by hand over SSH, was owned by UID 1000 with no write permission for \"other\" users." },
+        { "type": "code", "code": "chmod 777 ~/thehive-stack/cortex-jobs" },
+        { "type": "callout", "variant": "tip", "title": "Validated end to end", "text": "Both analyzers ran successfully against a live test IP (8.8.8.8) immediately after this fix: AbuseIPDB returned a 0/100 abuse confidence score (correctly whitelisted, Google's public DNS), and VirusTotal returned a full multi-engine report — 0 of 91 engines flagged it malicious, plus WHOIS, TLS certificate, and JARM fingerprint data." },
+        { "type": "callout", "variant": "info", "title": "Why this is worth documenting in detail", "text": "None of these four problems produced a genuinely clear error message. Diagnosing this required reading raw JSON error payloads, inspecting /proc/<pid>/status inside a container to find the real running UID, and reading the vendor's own reference config file instead of the (incomplete) public docs — the kind of layered debugging that's much more representative of real operations work than a clean install guide would be." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "title": "À propos",
+  "me": {
+    "title": "À propos de moi",
+    "name": "Tales Lima de Paula",
+    "tagline": "Blue Team / SOC — a construit ce laboratoire à partir d'un vieux portable et d'un réseau domestique.",
+    "bioPlaceholder": "[Ajoutez une courte bio ici — votre parcours, ce qui vous attire dans la sécurité défensive, et ce que vous recherchez ensuite.]",
+    "contactNote": "[Ajoutez vos liens de contact ici — email, LinkedIn, GitHub.]",
+    "editHint": "Ce bloc est volontairement un modèle — éditez directement src/i18n/locales/{en,fr}/about.json pour ajouter votre propre bio et vos coordonnées."
+  },
+  "project": {
+    "title": "À propos de ce projet",
+    "paragraphs": [
+      "Ce laboratoire a été construit en préparation directe et pratique d'une offre de stage centrée sur l'isolement automatisé (air-gap) et anti-rançongiciel pour les réseaux de stockage média — le type d'infrastructure qui fonctionne derrière le pipeline d'ingestion, de transcodage et de diffusion d'un radiodiffuseur. Plutôt que d'étudier le sujet de l'extérieur, l'objectif était de construire le système réel : un nœud de stockage média simulé, un vrai SIEM le surveillant, et une chaîne de confinement automatisée déclenchée par une vraie règle de détection.",
+      "Chaque affirmation technique de ce site est étayée par quelque chose qui a réellement tourné sur du matériel réel : un portable reconverti à 2 cœurs comme serveur SIEM, un mélange de machines physiques et de VM sous Windows, Linux et macOS, et un réseau véritablement sous-dimensionné qui a forcé de vrais compromis d'ingénierie plutôt que des solutions de manuel bien propres.",
+      "Le périmètre a dépassé le plan initial en 17 phases une fois la chaîne principale de détection et réponse fonctionnelle : une campagne complète de gestion des vulnérabilités CVE (24 CVE réelles, chacune avec une décision documentée de correction/atténuation/acceptation), un déploiement réseau Suricata sur 8 sondes après la découverte d'un véritable angle mort de visibilité, et une couche complète de gestion de cas TheHive + Cortex reliée directement à Wazuh.",
+      "Rien ici n'utilise de vrai logiciel malveillant. Chaque test de comportement de rançongiciel est un renommage de fichier sûr ou un test de chiffrement OpenSSL circonscrit sur des données jetables, toujours précédé d'une sauvegarde et d'une étape de restauration documentée. L'automatisation elle-même a été construite avec un indicateur de sécurité REPORT_ONLY et n'a jamais basculé en mode d'action réelle avant d'avoir été validée sur de nombreux événements sans aucun faux positif."
+    ]
+  },
+  "approach": {
+    "title": "Comment ce projet a été appris, pas seulement construit",
+    "intro": "Chaque domaine peu familier — API réseau, cadres de réponse à incident, mécanique interne d'Ansible — a été étudié selon un rythme hebdomadaire fixe avant d'être construit, pas improvisé en cours de route.",
+    "roadmap": [
+      { "week": "Semaine 1", "focus": "Fondamentaux Linux — permissions, systemd, LVM, Netplan" },
+      { "week": "Semaine 2", "focus": "Réseau I — TCP/IP, VLAN, concepts SDN" },
+      { "week": "Semaine 3", "focus": "Concepts SIEM/SOAR et le cadre MITRE ATT&CK" },
+      { "week": "Semaine 4", "focus": "Python pour l'automatisation — hashlib, json, pathlib, subprocess, requests" },
+      { "week": "Semaine 5", "focus": "API réseau — NETCONF vs SNMP vs CLI/REST, NAPALM/Netmiko/ncclient" },
+      { "week": "Semaine 6", "focus": "Ansible — playbooks, idempotence, et mécanique interne de la Réponse Active" },
+      { "week": "Semaine 7", "focus": "Réponse à incident — le cycle NIST SP 800-61, structure du rapport forensique" },
+      { "week": "Semaine 8", "focus": "Méthodologie d'évaluation et préparation à l'entretien" }
+    ],
+    "rhythm": "Environ une heure de théorie plus deux heures de pratique par jour de semaine, avec l'habitude constante d'enregistrer une courte vidéo de démonstration chaque vendredi.",
+    "pitchTitle": "La façon d'expliquer ce projet en 3 minutes",
+    "pitch": [
+      { "part": "Problème (30s)", "text": "Un pipeline média a besoin de détection et de confinement automatisés d'un rançongiciel sans perturber le signal de diffusion en direct." },
+      { "part": "Approche (60s)", "text": "Un vrai SIEM (Wazuh) surveille un nœud de stockage média simulé ; une règle personnalisée déclenche une chaîne d'automatisation Python : isoler, basculer, rapport forensique — le tout partageant un identifiant d'incident unique." },
+      { "part": "Résultat (60s)", "text": "3,00s de latence moyenne détection-vers-rapport sur 10 vraies exécutions, 0 faux positif — plus un vrai bug de perte de données trouvé et corrigé sous un test de charge en rafale de 100 fichiers." },
+      { "part": "Limites & prochaines étapes (30s)", "text": "Testé sur du matériel à 2 cœurs avec de vrais plafonds de débit ; le mode REPORT_ONLY n'a jamais basculé en action réelle ; la prochaine étape serait d'étendre la validation à une charge soutenue sur plusieurs heures." }
+    ]
+  }
+}

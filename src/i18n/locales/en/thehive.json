@@ -1,0 +1,66 @@
+{
+  "title": "TheHive",
+  "subtitle": "Case management / SOAR — where a Wazuh alert becomes a tracked investigation.",
+  "intro": [
+    { "type": "p", "text": "Wazuh detects and correlates; it has no concept of a \"case,\" an assigned analyst, or a task checklist. TheHive is the layer above that — every alert at level 7 or higher gets pushed into it automatically, where it can be triaged, promoted to a case using a standardized template, and worked through task by task." },
+    { "type": "p", "text": "It runs on its own dedicated VM (thehive-vm, 8GB RAM / 4 vCPU / 80GB, bridged onto the same LAN as every other agent), as a Docker Compose stack: TheHive 5.2, Cortex 3.1.8, Cassandra 4.1 for storage, and Elasticsearch 7.17.13 as the shared search index." }
+  ],
+  "sections": [
+    {
+      "id": "install",
+      "title": "Installing the stack",
+      "blocks": [
+        { "type": "p", "text": "Four services, one docker-compose.yml. Cassandra and Elasticsearch come up first, then Cortex, then TheHive last — TheHive needs a working Cortex API key already available in its config before it starts up usefully." },
+        { "type": "code", "lang": "yaml", "code": "services:\n  cassandra:\n    image: cassandra:4.1\n    environment:\n      - MAX_HEAP_SIZE=1G\n      - HEAP_NEWSIZE=1G\n      - CASSANDRA_CLUSTER_NAME=thp\n\n  elasticsearch:\n    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13\n    environment:\n      - discovery.type=single-node\n      - xpack.security.enabled=false\n      - \"ES_JAVA_OPTS=-Xms1g -Xmx1g\"\n\n  cortex:\n    image: thehiveproject/cortex:3.1.8\n    depends_on: [elasticsearch]\n    ports: [\"9001:9001\"]\n    volumes:\n      - ./cortex/application.conf:/etc/cortex/application.conf\n      - /var/run/docker.sock:/var/run/docker.sock\n\n  thehive:\n    image: strangebee/thehive:5.2\n    depends_on: [cassandra, elasticsearch, cortex]\n    ports: [\"9000:9000\"]\n    volumes:\n      - ./thehive/application.conf:/etc/thehive/application.conf" },
+        { "type": "callout", "variant": "info", "title": "One host-level gotcha before any of this works", "text": "Elasticsearch requires the kernel setting `vm.max_map_count >= 262144` on the actual VM host, set via /etc/sysctl.d/ before the containers can start — a container-level fix alone isn't enough." },
+        { "type": "p", "text": "On first boot, TheHive imports 707 MITRE ATT&CK patterns automatically — the same taxonomy already used throughout the Wazuh alerts and case templates on this site." }
+      ]
+    },
+    {
+      "id": "orgs-users",
+      "title": "Organizations and users — the lesson that mattered most",
+      "blocks": [
+        { "type": "callout", "variant": "danger", "title": "The default organization is a trap", "text": "Both TheHive and Cortex ship with a reserved default organization (\"admin\" in TheHive, \"cortex\" in Cortex) meant purely for platform administration — creating other organizations and users. It is not where real work happens, and it deliberately can't do real work: a user in that org can't hold the roles needed to create alerts, enable analyzers, or manage cases. The first real API call against it failed with a blunt `403 — you don't have the permission manageAlert/create`, which is exactly the platform's intended behavior, not a bug." },
+        { "type": "p", "text": "The fix is the same in both tools: create a second, real working organization (this lab uses `soc-lab` in both TheHive and Cortex), and inside it create two kinds of accounts — a normal, password-based analyst account for humans, and a Service-type account authenticating only via API key for automation." },
+        { "type": "h3", "text": "TheHive: creating the working org" },
+        { "type": "ol", "items": [
+          "Log in as the initial admin@thehive.local superadmin account (Organisations → the reserved admin org).",
+          "Organisations → + → create a new organisation, e.g. soc-lab.",
+          "Inside soc-lab → Users → Add User → a normal account with the org-admin profile, a real password, used for day-to-day investigation.",
+          "A second Service-type user (e.g. wazuh-integration@soc-lab.local) with the analyst profile, no password — only an API key — used exclusively by the Wazuh integration script."
+        ]},
+        { "type": "h3", "text": "Cortex: the exact same pattern, different terminology" },
+        { "type": "p", "text": "Cortex uses granular role checkboxes instead of a single profile dropdown: read, analyze, orgAdmin. A working-org user needs all three to browse and enable analyzers from the catalog — the reserved default org's role selector only ever offers \"superadmin\", which is itself the tell that you're in the wrong org." }
+      ]
+    },
+    {
+      "id": "case-templates",
+      "title": "Four standardized case templates",
+      "blocks": [
+        { "type": "p", "text": "Rather than starting every investigation from a blank case, four templates were created via the API (a short Python script using only the standard library's urllib, no external dependencies) so any alert can be promoted straight into a structured checklist." },
+        { "type": "table", "headers": ["Template", "Severity", "Tasks"], "rows": [
+          ["Port Scan / Network Reconnaissance", "Medium", "6 — confirm source/dest, map to MITRE T1046/T1595.002, verify authorized machine, decide close or escalate"],
+          ["SSH Brute-force Investigation", "High", "7 — count attempts, map to T1110.001/003, check for a successful login after failures, force reset if compromised"],
+          ["Ransomware / FIM Critical Alert", "Critical", "8 — identify affected files, T1486/T1490, isolate host, preserve evidence, identify patient zero, restore from backup"],
+          ["CVE / Vulnerability Triage", "Medium", "7 — deliberately mirrors the exact fix/mitigate/accept workflow used for the 24 real CVEs on the CVE Management page"]
+        ]},
+        { "type": "callout", "variant": "tip", "text": "The CVE template's last task is literally \"create/update the file in the vulnerabilidades/ repository folder\" — the case-management workflow and the actual documentation habit are the same process, not two separate things." }
+      ]
+    },
+    {
+      "id": "wazuh-integration",
+      "title": "Connecting Wazuh to TheHive",
+      "blocks": [
+        { "type": "p", "text": "Wazuh has no built-in TheHive connector. The bridge uses Wazuh's own custom-integration mechanism (wazuh-integratord), which calls a script on every alert matching a configured level, passing the alert file path plus an API key and hook URL as arguments." },
+        { "type": "code", "lang": "xml", "code": "<integration>\n  <name>custom-thehive</name>\n  <hook_url>http://192.168.178.164:9000</hook_url>\n  <api_key>...</api_key>\n  <alert_format>json</alert_format>\n  <level>7</level>\n</integration>" },
+        { "type": "p", "text": "The script itself (a wrapper shell script plus a Python file, the standard pattern for all custom Wazuh integrations) reads the alert JSON, maps the Wazuh rule.level to a TheHive severity (1–4), and POSTs to TheHive's alert-creation API with a Bearer token." },
+        { "type": "h3", "text": "Two real bugs on the way to a working integration" },
+        { "type": "ul", "items": [
+          "The terminal's line editor was silently corrupting large pasted heredocs containing curly braces (common in Python f-strings). Worked around by base64-encoding the whole script locally and decoding it in a single line on the remote host — completely immune to shell/editor character interpretation.",
+          "The first live test returned HTTP 403 with the same manageAlert/create permission error described above — using the reserved admin organization's API key instead of a working-org key. Switching to a soc-lab-scoped API key fixed it immediately."
+        ]},
+        { "type": "callout", "variant": "info", "title": "Validation", "text": "A manual test alert returned HTTP 201 — and within minutes, real Wazuh alerts (a \"Listened ports status changed\" event and a rootcheck anomaly) appeared in TheHive's queue with zero further manual action, confirming the integratord daemon was calling the script correctly in production, not just in the manual test." }
+      ]
+    }
+  ]
+}

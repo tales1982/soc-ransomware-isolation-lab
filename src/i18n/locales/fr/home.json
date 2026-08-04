@@ -1,0 +1,64 @@
+{
+  "hero": {
+    "eyebrow": "Un vrai SOC domestique, construit puis délibérément mis à l'épreuve",
+    "title": "J'ai construit un centre opérationnel de sécurité à partir d'un vieux portable.",
+    "titleHighlight": "Puis j'ai essayé de le casser.",
+    "subtitle": "Wazuh, Suricata, TheHive et Cortex, reliés entre eux sur 9 machines réelles — Windows, Linux et macOS — pour détecter et contenir automatiquement une attaque de type rançongiciel sur un réseau de stockage média simulé. Chaque bug présenté sur ce site est un bug réel, rencontré puis corrigé.",
+    "ctaPrimary": "Voir l'installation",
+    "ctaSecondary": "Découvrir les technologies"
+  },
+  "stats": [
+    { "value": "9", "label": "Machines réelles surveillées" },
+    { "value": "8", "label": "Sondes Suricata indépendantes" },
+    { "value": "24", "label": "CVE traitées de bout en bout" },
+    { "value": "44", "label": "Exercices et attaques pratiques" },
+    { "value": "707", "label": "Techniques MITRE ATT&CK chargées" },
+    { "value": "3,00s", "label": "Latence moy. détection → rapport forensique" }
+  ],
+  "pillars": {
+    "title": "Ce que ce laboratoire prouve réellement",
+    "items": [
+      {
+        "title": "Détection",
+        "text": "SIEM Wazuh avec surveillance d'intégrité des fichiers (FIM), Sysmon, auditd et 8 sondes réseau Suricata déployées indépendamment — pas un simple port-miroir unique."
+      },
+      {
+        "title": "Réponse automatisée",
+        "text": "Une règle de corrélation personnalisée déclenche une chaîne de réponse active en Python : isolement réseau, bascule de charge de travail, et rapport forensique JSON — le tout partageant un identifiant d'incident unique, avec une latence moyenne mesurée de 3,00s de bout en bout."
+      },
+      {
+        "title": "Gestion des cas",
+        "text": "TheHive reçoit automatiquement chaque alerte de niveau 7 et plus, Cortex enrichit les observables via VirusTotal et AbuseIPDB, et quatre modèles de cas standardisent le flux d'investigation."
+      },
+      {
+        "title": "Gestion des vulnérabilités",
+        "text": "24 CVE réelles traitées une par une — pas seulement scannées — avec une décision explicite de correction, d'atténuation ou d'acceptation du risque, justifiée pour chacune d'entre elles."
+      }
+    ]
+  },
+  "story": {
+    "title": "Pourquoi ce projet existe",
+    "paragraphs": [
+      "Ce laboratoire a été construit en préparation directe d'une offre de stage intitulée « Automated Air-Gap and Ransomware Isolation in Media Storage Networks ». Plutôt que d'étudier le sujet dans l'abstrait, j'ai construit la chose elle-même : un pipeline média de diffusion simulé (ingestion → diffusion → archive → quarantaine) sur un hôte Linux réel, connecté à un vrai SIEM, et j'ai passé une semaine à découvrir précisément où un système de confinement automatisé casse sous charge.",
+      "Rien ici n'est une maquette ou une capture d'écran de tutoriel. Chaque tableau de bord, chaque identifiant de règle, chaque bug décrit sur ce site est sorti d'un vrai terminal, sur du matériel réel, sur mon propre réseau domestique. Le matériel lui-même faisait partie de la contrainte : un portable de 8 ans, 2 cœurs, reconverti en serveur SIEM — qui s'est révélé être l'une des limitations les plus instructives de tout le projet."
+    ]
+  },
+  "warstories": {
+    "title": "Quelques bugs qui valent la lecture",
+    "subtitle": "Chacun d'eux a été trouvé en testant, jamais en relisant le design sur papier.",
+    "items": [
+      {
+        "title": "300 alertes, seulement 100 rapports forensiques",
+        "text": "Simuler un événement de rançongiciel massif (100 fichiers renommés d'un coup) a révélé que mes identifiants d'incident — générés avec une résolution d'horodatage à la seconde — entraient en collision sous charge, écrasant silencieusement des preuves forensiques. Exactement au moment où cela compterait le plus lors d'une vraie attaque."
+      },
+      {
+        "title": "Un scan qui aurait dû être invisible... et qui l'était",
+        "text": "Un scan nmap réel contre l'une de mes propres machines n'a produit aucune alerte, nulle part. Il s'agissait en fait de deux problèmes distincts superposés : une fausse alerte due au routage en boucle locale, et un véritable angle mort architectural des déploiements Suricata à sonde unique."
+      },
+      {
+        "title": "Un script qui s'exécutait sans rien faire",
+        "text": "Un script de réponse active journalisait « commande envoyée » sans jamais rien isoler. Le bug : un gros collage dans nano avait silencieusement supprimé le bloc final `if __name__ == \"__main__\":`. Code de sortie 0, zéro ligne de log — la signature d'un script qui ne fait que définir des fonctions sans jamais les appeler."
+      }
+    ]
+  }
+}

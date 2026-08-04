@@ -1,0 +1,48 @@
+{
+  "title": "Gestion des CVE",
+  "subtitle": "24 vraies vulnérabilités, traitées une par une — pas seulement scannées puis oubliées.",
+  "intro": [
+    { "type": "p", "text": "Le module Vulnerability Detection de Wazuh signale automatiquement les CVE des paquets installés. La partie scan est la partie facile. Ce qui compte vraiment — et ce que documente cette page — c'est la décision prise pour chacune : la corriger, l'atténuer, ou accepter formellement le risque, avec une raison écrite dans tous les cas." },
+    { "type": "callout", "variant": "info", "title": "Le fil conducteur de chaque cas, sans exception", "text": "Un score CVSS seul a été jugé insuffisant à chaque fois. Chaque entrée associe le score de sévérité de l'éditeur à une vérification d'usage réel — le module noyau vulnérable est-il seulement chargé ? Le paquet est-il installé manuellement ou n'est-ce qu'une dépendance égarée ? L'architecture affectée est-elle même utilisée ici ? — avant de décider quoi en faire." }
+  ],
+  "methodology": {
+    "title": "Le processus en cinq étapes appliqué à chaque CVE",
+    "steps": [
+      { "title": "1. Identifier", "text": "Paquet, agent affecté, sévérité CVSS — et lire la description complète, pas seulement le numéro de CVE." },
+      { "title": "2. Évaluer l'exploitabilité réelle", "text": "Le CVSS mesure le pire cas, pas cet environnement. Vérifier si le composant vulnérable est réellement utilisé : le module noyau est-il chargé (lsmod) ? Le paquet est-il installé manuellement (apt-mark showmanual) ? Qu'est-ce qui en dépend réellement (apt-cache rdepends) ?" },
+      { "title": "3. Vérifier la disponibilité d'un correctif", "text": "apt list --upgradable plus le vrai tracker de l'éditeur (Ubuntu Security Tracker), pas seulement le résumé du scanner." },
+      { "title": "4. Décider", "text": "Corriger (correctif disponible, l'appliquer), Atténuer (pas encore de correctif, réduire la surface d'attaque — par ex. mettre en liste noire un module noyau inutilisé), ou Accepter le risque (déjà neutralisé par un contrôle existant, ou aucune atténuation raisonnable n'existe)." },
+      { "title": "5. Documenter et fixer un déclencheur de réévaluation", "text": "Chaque cas de risque accepté reçoit une justification écrite et une condition concrète de réévaluation — la preuve, pour un auditeur ou le prochain analyste, que le cas a été examiné et non simplement ignoré." }
+    ]
+  },
+  "table": {
+    "title": "Les 24 cas",
+    "headers": ["CVE", "Paquet", "Sévérité", "Statut", "Résumé"]
+  },
+  "cves": [
+    { "id": "CVE-2026-53355", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Use-after-free dans le démontage RDS-sur-InfiniBand. Le module rds n'était pas chargé, donc mis en liste noire en attendant un correctif éditeur." },
+    { "id": "CVE-2026-53246", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Lecture hors limites dans le traitement des cookies SCTP. Aucun écouteur SCTP en usage ; module sctp mis en liste noire en atténuation." },
+    { "id": "CVE-2026-53225", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Lecture de mémoire non initialisée dans l'analyse SCTP ASCONF — déjà couverte par la liste noire du module sctp ci-dessus." },
+    { "id": "CVE-2026-53224", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Validation incomplète de la longueur du cookie SCTP INIT — déjà couverte par la même liste noire sctp." },
+    { "id": "CVE-2026-53228", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Use-after-free dans le pilote de tunnel SIT (IPv6-sur-IPv4) pendant le GSO. Module sit non chargé ; mis en liste noire." },
+    { "id": "CVE-2026-53151", "package": "linux-image (noyau)", "severity": "critical", "status": "mitigated", "summary": "Bug de gestion de buffer dans l'analyseur ACK AF_RXRPC. Module rxrpc non chargé ; mis en liste noire." },
+    { "id": "CVE-2022-0400", "package": "linux-image (noyau)", "severity": "high", "status": "mitigated", "summary": "Lecture hors limites dans la pile protocolaire SMC (orientée RDMA) du noyau causant un déni de service. Module smc non chargé ; mis en liste noire." },
+    { "id": "CVE-2026-53362", "package": "linux-image (noyau)", "severity": "high", "status": "accepted", "summary": "Corruption mémoire dans la comptabilisation des fragments IPv6. IPv6 confirmé en usage actif et la faille nécessite un processus local non privilégié déjà en cours d'exécution — accepté, désactiver IPv6 casserait une vraie connectivité." },
+    { "id": "CVE-2023-0160", "package": "linux-image (noyau)", "severity": "medium", "status": "accepted", "summary": "Interblocage dans le sous-système BPF du noyau. Déjà neutralisé : kernel.unprivileged_bpf_disabled était déjà réglé sur 2. Aucune action nécessaire." },
+    { "id": "CVE-2026-31536", "package": "linux-image (noyau orphelin)", "severity": "critical", "status": "fixed", "summary": "Pas le noyau en cours d'exécution — une ancienne version de noyau jamais démarrée (134, alors que la 136 était active) a été trouvée encore installée et générant cette CVE. Purgée, 302 Mo libérés." },
+    { "id": "CVE-2026-24679", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Lecture hors limites dans le client de redirection USB de FreeRDP. Corrigé via Ubuntu Pro ESM Apps." },
+    { "id": "CVE-2024-32659", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Lecture hors limites sur largeur/hauteur de trame nulle. Confirmé comme une vraie dépendance de patator (un outil de pentest) avant de décider de corriger plutôt que de retirer." },
+    { "id": "CVE-2024-32041", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Lecture hors limites dans le canal graphique /gfx — corrigé dans le même lot ESM Apps." },
+    { "id": "CVE-2024-32459", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Lecture hors limites affectant le code client et serveur, aucun contournement disponible — correctif appliqué." },
+    { "id": "CVE-2024-32039", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Débordement d'entier menant à une écriture hors limites dans le canal /gfx — plus grave qu'une lecture, potentiel réel de RCE." },
+    { "id": "CVE-2024-35366", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "Débordement d'entier dans le démultiplexeur SBaGen de FFmpeg acceptant des durées négatives non validées." },
+    { "id": "CVE-2024-35367", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "Lecture hors limites dans un chemin de décodeur VP8 spécifique à PowerPC — inatteignable sur cette machine amd64, corrigé quand même dans le même lot." },
+    { "id": "CVE-2024-35368", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "Double-free dans l'enveloppe du décodeur matériel Rockchip MPP — spécifique ARM, non applicable ici, corrigé avec le reste du lot." },
+    { "id": "CVE-2023-6602", "package": "libavcodec60", "severity": "medium", "status": "accepted", "summary": "Faille d'exfiltration de données via des playlists HLS forgées dans le démultiplexeur TTY de FFmpeg. Correctif éditeur reporté indéfiniment ; bibliothèque partagée ne pouvant être désactivée sélectivement — accepté vu la sévérité faible." },
+    { "id": "CVE-2025-25467", "package": "libx264-164", "severity": "critical", "status": "accepted", "summary": "Suivi mémoire insuffisant permettant un RCE via un fichier AAC malveillant. Correctif amont bloqué sans suite ; aucune atténuation sûre pour une bibliothèque de codec partagée." },
+    { "id": "CVE-2025-68121", "package": "golang-1.22-src", "severity": "critical", "status": "accepted", "summary": "Contournement de la reprise de session TLS dans crypto/tls de Go sous un motif de code spécifique. Affecte la chaîne d'outils de développement, pas un service en cours d'exécution — aucune preuve que ce motif est utilisé." },
+    { "id": "CVE-2025-49844", "package": "liblua5.1-0 (signalé) / Valkey", "severity": "critical", "status": "accepted", "summary": "Use-after-free via un script Lua GC forgé dans le scripting Redis/Valkey. Wazuh a signalé la bibliothèque Lua générique, mais le composant réellement exploitable (valkey-server) exécutait déjà une version corrigée — clos, aucune action." },
+    { "id": "CVE-2025-57052", "package": "libcjson1", "severity": "critical", "status": "fixed", "summary": "Accès hors limites dans le décodage d'index de tableau JSON-pointer de cJSON. Corrigé via Ubuntu Pro ESM Apps." },
+    { "id": "CVE-2026-31789", "package": "ovmf (edk2 / OpenSSL)", "severity": "critical", "status": "accepted", "summary": "Débordement de tas en convertissant un champ X.509 surdimensionné en hexadécimal — mais uniquement sur les builds 32 bits avec un certificat malveillant de plus de 1 Go. Le firmware VM de ce laboratoire est en 64 bits ; l'éditeur lui-même le classe Faible. Accepté." }
+  ]
+}

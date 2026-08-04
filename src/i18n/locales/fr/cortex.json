@@ -1,0 +1,48 @@
+{
+  "title": "Cortex",
+  "subtitle": "Enrichissement des observables — transformer une simple adresse IP en score de réputation.",
+  "intro": [
+    { "type": "p", "text": "Cortex se place à côté de TheHive et fait un seul travail : étant donné un observable (une IP, un hash, un domaine, une URL) attaché à un cas, le passer à travers un ou plusieurs « analyseurs » — de petits workers qui interrogent une source de renseignement externe ou locale et renvoient un verdict structuré." },
+    { "type": "p", "text": "Deux analyseurs sont câblés dans ce laboratoire : AbuseIPDB (réputation IP) et VirusTotal_GetReport (réputation multi-moteurs pour IP, hashs, domaines et URL) — deux services en offre gratuite, chacun nécessitant sa propre clé API depuis un compte personnel." }
+  ],
+  "sections": [
+    {
+      "id": "enabling-analyzers",
+      "title": "Faire qu'un analyseur tourne réellement",
+      "blocks": [
+        { "type": "p", "text": "Ce n'est pas une seule étape, et l'interface ne le rend pas évident." },
+        { "type": "ol", "items": [
+          "Activer d'abord le catalogue complet des analyseurs : le application.conf de Cortex a besoin d'une entrée analyzer.urls pointant vers le manifeste officiel (https://download.thehive-project.org/analyzers.json), plus job.runners configuré pour autoriser le runner Docker — sans cela, la liste des analyseurs est vide.",
+          "Configurer les identifiants : Organization → Analyzers Config → trouver le bloc de l'analyseur (AbuseIPDB, VirusTotal) → Edit → coller la clé API. Cela seul n'active pas l'analyseur.",
+          "L'activer réellement : Organization → Analyzers (un onglet séparé de Config) → chercher l'entrée versionnée spécifique (AbuseIPDB_2_0, VirusTotal_GetReport_3_1) dans un catalogue de 277 entrées → cliquer « + Enable ». Ce n'est qu'après cela qu'il apparaît comme option sélectionnable dans New Analysis."
+        ]},
+        { "type": "callout", "variant": "warning", "text": "Remplir une clé API sans jamais cliquer sur « + Enable » est un échec totalement silencieux — l'analyseur n'apparaît simplement jamais comme option, sans message d'erreur indiquant pourquoi." }
+      ]
+    },
+    {
+      "id": "docker-in-docker",
+      "title": "L'épopée de débogage du Docker-dans-Docker",
+      "blocks": [
+        { "type": "p", "text": "Les deux analyseurs étaient correctement configurés et activés, et chaque test échouait toujours avec exactement le même symptôme : une erreur de décodage JSON vide, `input: null`. Aucun conteneur d'analyseur n'apparaissait jamais dans `docker ps -a` — signifiant que l'échec survenait avant même que Cortex ne demande à Docker de lancer quoi que ce soit." },
+        { "type": "h3", "text": "Cause racine : Cortex monte le vrai socket Docker de l'hôte" },
+        { "type": "p", "text": "Cortex exécute le runner de job « docker » en demandant au propre dockerd de l'hôte (via le /var/run/docker.sock monté) de créer un conteneur d'analyseur frère — pas un démon Docker imbriqué à l'intérieur de son propre conteneur. Cela signifie que tout chemin que Cortex demande à Docker de monter en bind doit être un chemin qui existe sur le vrai hôte, identique des deux côtés. Un chemin de répertoire de travail de job qui n'existe que dans le système de fichiers du propre conteneur de Cortex n'a aucun sens pour le démon Docker de l'hôte." },
+        { "type": "h3", "text": "Correction, tentative 1 : monter le même chemin en bind des deux côtés" },
+        { "type": "code", "code": "volumes:\n  - /home/thehive/thehive-stack/cortex-jobs:/home/thehive/thehive-stack/cortex-jobs" },
+        { "type": "p", "text": "Toujours en échec — même symptôme, texte d'erreur légèrement différent (maintenant juste le chemin brut du répertoire de job, sans traceback)." },
+        { "type": "h3", "text": "Correction, tentative 2 : la clé de config était silencieusement fausse" },
+        { "type": "p", "text": "Lire le reference.conf propre à Cortex, embarqué dans l'image (plutôt que de deviner), a révélé deux vraies erreurs :" },
+        { "type": "ul", "items": [
+          "La bonne clé est `job.runners` (au pluriel). `job.runner` — la première hypothèse, très raisonnable — est une clé qui n'existe tout simplement pas, et HOCON ignore silencieusement les clés inconnues au lieu de générer une erreur. Elle n'a eu aucun effet pendant tout ce temps.",
+          "Une clé séparée, `job.dockerDirectory`, distincte de `job.directory`, est ce qui contrôle réellement le chemin de montage en bind côté hôte utilisé pour les conteneurs d'analyseurs créés."
+        ]},
+        { "type": "code", "lang": "hocon", "code": "job {\n  runners = [docker]\n  directory = \"/home/thehive/thehive-stack/cortex-jobs\"\n  dockerDirectory = \"/home/thehive/thehive-stack/cortex-jobs\"\n}" },
+        { "type": "p", "text": "Corrigé, redémarré — encore le même échec. Plus proche, mais pas encore résolu." },
+        { "type": "h3", "text": "La vraie cause racine : une incohérence d'UID" },
+        { "type": "p", "text": "Inspecter le vrai processus Java en cours d'exécution à l'intérieur du conteneur Cortex (pas le shell utilisé pour faire `docker exec`, qui utilise root par défaut et masque les problèmes de permission) a montré qu'il tournait avec l'UID 1001. Le dossier partagé de l'hôte, créé à la main via SSH, appartenait à l'UID 1000 sans permission d'écriture pour les utilisateurs « autres »." },
+        { "type": "code", "code": "chmod 777 ~/thehive-stack/cortex-jobs" },
+        { "type": "callout", "variant": "tip", "title": "Validé de bout en bout", "text": "Les deux analyseurs ont fonctionné avec succès contre une IP de test en direct (8.8.8.8) immédiatement après cette correction : AbuseIPDB a renvoyé un score de confiance d'abus de 0/100 (correctement whitelisté, le DNS public de Google), et VirusTotal a renvoyé un rapport complet multi-moteurs — 0 des 91 moteurs l'ont signalé comme malveillant, plus des données WHOIS, de certificat TLS, et d'empreinte JARM." },
+        { "type": "callout", "variant": "info", "title": "Pourquoi cela vaut la peine d'être documenté en détail", "text": "Aucun de ces quatre problèmes n'a produit un message d'erreur véritablement clair. Diagnostiquer cela a nécessité de lire des charges utiles d'erreur JSON brutes, d'inspecter /proc/<pid>/status à l'intérieur d'un conteneur pour trouver le vrai UID en cours d'exécution, et de lire le fichier de config de référence propre à l'éditeur plutôt que la documentation publique (incomplète) — le genre de débogage en couches bien plus représentatif du vrai travail opérationnel qu'un guide d'installation propre ne le serait." }
+      ]
+    }
+  ]
+}

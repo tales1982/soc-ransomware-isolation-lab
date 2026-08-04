@@ -1,0 +1,64 @@
+{
+  "hero": {
+    "eyebrow": "A real home SOC, built and broken on purpose",
+    "title": "I built a Security Operations Center from a repurposed laptop.",
+    "titleHighlight": "Then I tried to break it.",
+    "subtitle": "Wazuh, Suricata, TheHive and Cortex, wired together across 9 real machines — Windows, Linux and macOS — to detect and automatically contain a ransomware-style attack on a simulated media storage network. Every bug on this site is a real bug I hit and fixed.",
+    "ctaPrimary": "See the installation",
+    "ctaSecondary": "Read the technologies"
+  },
+  "stats": [
+    { "value": "9", "label": "Real machines monitored" },
+    { "value": "8", "label": "Independent Suricata sensors" },
+    { "value": "24", "label": "CVEs triaged end-to-end" },
+    { "value": "44", "label": "Hands-on exercises & attacks" },
+    { "value": "707", "label": "MITRE ATT&CK patterns loaded" },
+    { "value": "3.00s", "label": "Avg. detect-to-forensic-report latency" }
+  ],
+  "pillars": {
+    "title": "What this lab actually proves",
+    "items": [
+      {
+        "title": "Detection",
+        "text": "Wazuh SIEM with File Integrity Monitoring, Sysmon, auditd and 8 independently deployed Suricata network sensors — not a single mirrored tap."
+      },
+      {
+        "title": "Automated response",
+        "text": "A custom correlation rule fires a Python Active Response chain: network isolation, workload failover, and a forensic JSON report — all sharing one incident ID, measured at a 3.00s average end-to-end latency."
+      },
+      {
+        "title": "Case management",
+        "text": "TheHive receives every level-7+ alert automatically, Cortex enriches observables against VirusTotal and AbuseIPDB, and four case templates standardize the investigation workflow."
+      },
+      {
+        "title": "Vulnerability management",
+        "text": "24 real CVEs triaged one by one — not just scanned — with an explicit fix / mitigate / accept-risk decision and rationale documented for every single one."
+      }
+    ]
+  },
+  "story": {
+    "title": "Why this exists",
+    "paragraphs": [
+      "This lab was built as direct preparation for an internship posting titled \"Automated Air-Gap and Ransomware Isolation in Media Storage Networks.\" Instead of studying the topic in the abstract, I built the actual thing: a simulated broadcaster media pipeline (ingest → live → archive → quarantine) on a real Linux host, wired it into a real SIEM, and spent a week finding out exactly where an automated containment system breaks under load.",
+      "Nothing here is a mockup or a tutorial screenshot. Every dashboard, every rule ID, every bug described on this site came out of a real terminal, on real hardware, on my own home network. The hardware itself was part of the constraint: an 8-year-old, 2-core laptop repurposed as the SIEM server — which turned out to be one of the most instructive limitations in the whole project."
+    ]
+  },
+  "warstories": {
+    "title": "A few bugs worth reading about",
+    "subtitle": "Every one of these was found by testing, not by design review.",
+    "items": [
+      {
+        "title": "300 alerts, only 100 forensic reports",
+        "text": "Simulating a mass ransomware event (100 files renamed at once) revealed that my incident IDs — generated with 1-second timestamp resolution — collided under load, silently overwriting forensic evidence. Exactly the moment it would matter most in a real attack."
+      },
+      {
+        "title": "A scan that should have been invisible... and was",
+        "text": "A live nmap scan against one of my own machines produced zero alerts anywhere. Turned out to be two separate problems layered on top of each other: a loopback-routing false alarm, and a genuine architectural blind spot in single-sensor Suricata deployments."
+      },
+      {
+        "title": "A script that ran and did nothing",
+        "text": "An Active Response script logged 'command dispatched' but never isolated anything. The bug: a big paste in nano had silently deleted the trailing `if __name__ == \"__main__\":` block. Exit code 0, zero log lines — the signature of a script that only defines functions and never calls them."
+      }
+    ]
+  }
+}

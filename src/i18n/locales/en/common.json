@@ -1,0 +1,55 @@
+{
+  "site": {
+    "title": "SOC Lab",
+    "subtitle": "Ransomware Isolation & Blue Team Portfolio"
+  },
+  "nav": {
+    "home": "Overview",
+    "installation": "Installation",
+    "technologies": "Technologies",
+    "wazuh": "Wazuh",
+    "thehive": "TheHive",
+    "cortex": "Cortex",
+    "automation": "Automation & Endpoints",
+    "vulnerabilities": "CVE Management",
+    "exercises": "Exercises",
+    "about": "About"
+  },
+  "actions": {
+    "toggleTheme": "Toggle theme",
+    "toggleLanguage": "Toggle language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "readMore": "Read more",
+    "backToTop": "Back to top",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "reset": "Reset progress",
+    "viewOnGithub": "View on GitHub"
+  },
+  "footer": {
+    "builtWith": "Built with React, Redux Toolkit, i18next and Tailwind CSS.",
+    "rights": "All lab data shown here comes from a real, self-built home lab."
+  },
+  "labels": {
+    "difficulty": "Difficulty",
+    "time": "Time",
+    "tools": "Tools",
+    "mitre": "MITRE ATT&CK",
+    "risk": "Risk",
+    "category": "Category",
+    "status": "Status",
+    "severity": "Severity",
+    "package": "Package",
+    "agent": "Agent",
+    "easy": "Easy",
+    "medium": "Medium",
+    "hard": "Hard",
+    "low": "Low",
+    "high": "High",
+    "critical": "Critical",
+    "fixed": "Fixed",
+    "accepted": "Risk accepted",
+    "mitigated": "Mitigated"
+  }
+}

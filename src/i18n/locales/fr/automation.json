@@ -1,0 +1,175 @@
+{
+  "title": "Automatisation & Points de terminaison",
+  "subtitle": "Sysmon, auditd, le serveur de stockage média, Ansible, le moteur d'automatisation Python, et le playbook complet de confinement anti-rançongiciel.",
+  "intro": [
+    { "type": "p", "text": "C'est tout ce qui se trouve sous l'alerte Wazuh : les agents de point de terminaison qui l'alimentent en télémétrie, le serveur média simulé qu'elle protège, et la chaîne d'automatisation qui réagit réellement quand la règle 100200 se déclenche. La majorité de ceci vit sous BCE-RTL-SOC-LAB/ dans le dépôt — des artefacts livrables, pas seulement du récit." }
+  ],
+  "sections": [
+    {
+      "id": "sysmon",
+      "title": "Sysmon — télémétrie des points de terminaison Windows",
+      "blocks": [
+        { "type": "p", "text": "Sysmon (Microsoft Sysinternals) est l'équivalent côté Windows d'auditd : une télémétrie détaillée des processus, du réseau et du registre, allant bien au-delà des journaux d'événements Windows par défaut. C'est ce qui alimente les alertes cartographiées MITRE T1548.003/T1078 référencées tout au long de la page Wazuh." },
+        { "type": "ol", "items": [
+          "Vérifier d'abord une installation préexistante — pertinent pour les VM clonées/réutilisées.",
+          "Télécharger uniquement depuis la source officielle Microsoft Sysinternals.",
+          "Installer avec une configuration communautaire cartographiée MITRE ATT&CK (SwiftOnSecurity ou olafhartong/sysmon-modular) plutôt que la config par défaut, très sommaire.",
+          "Relier les canaux Microsoft-Windows-Sysmon/Operational et PowerShell-Operational dans le ossec.conf de l'agent Wazuh.",
+          "Valider sur le tableau de bord."
+        ]},
+        { "type": "code", "code": "Sysmon64.exe -accepteula -i sysmonconfig.xml" },
+        { "type": "callout", "variant": "tip", "title": "Un faux positif documenté et attendu", "text": "La règle 92910 (« VBoxService accessing Explorer — possible process injection ») se déclenche systématiquement sur les VM VirtualBox. C'est un comportement réel et bénin du service Guest Additions — un vrai exemple du genre de décision de calibrage que chaque SOC doit prendre, pas un bug à traquer." }
+      ]
+    },
+    {
+      "id": "auditd",
+      "title": "auditd — journalisation d'audit au niveau du noyau Linux",
+      "blocks": [
+        { "type": "p", "text": "Le Linux Audit Framework surveille les appels système et l'accès aux fichiers au niveau du noyau — changements d'identité, élévation de privilèges, modifications de config SSH, et (étendu pour ce laboratoire) opérations de masse sur des fichiers ressemblant à un comportement de rançongiciel." },
+        { "type": "h3", "text": "Règles de surveillance de base" },
+        { "type": "code", "code": "-w /etc/passwd -p wa -k identity\n-w /etc/group -p wa -k identity\n-w /etc/shadow -p wa -k identity\n-w /etc/sudoers -p wa -k privilege\n-w /etc/ssh/sshd_config -p wa -k sshd_config" },
+        { "type": "h3", "text": "Règles étendues, pertinentes pour le rançongiciel, construites pour ce laboratoire" },
+        { "type": "ul", "items": [
+          "Détection de suppression/renommage massif de fichiers via l'audit des appels système (unlink, unlinkat, rename, renameat)",
+          "Chargement/déchargement de modules noyau — un indicateur de rootkit",
+          "Élévation de privilèges setuid/setgid",
+          "La surveillance de /srv/media utilisée directement par la phase serveur média",
+          "Chemins de persistance cron et modifications de authorized_keys SSH",
+          "Surveillance mount/umount — exfiltration via média externe"
+        ]},
+        { "type": "callout", "variant": "warning", "title": "Un piège qui coûte un faux négatif au premier test, à chaque fois", "text": "Le premier `touch` sur un fichier surveillé, avant que le FIM temps réel ne soit réellement activé, ne devient que la référence de base — il ne déclenche aucune alerte. Il faut retoucher le fichier après le redémarrage de l'agent pour voir la vraie détection. Aussi : le cycle de scan par défaut de Wazuh pour /etc est de 12 heures, bien trop lent pour la détection en direct — le FIM temps réel doit être explicitement activé." }
+      ]
+    },
+    {
+      "id": "media-server",
+      "title": "Le nœud de stockage média simulé",
+      "blocks": [
+        { "type": "p", "text": "Transforme un point de terminaison Linux connecté en l'actif réellement protégé du laboratoire — la pièce centrale de toute la prémisse « isolement anti-rançongiciel dans les réseaux de stockage média »." },
+        { "type": "code", "code": "mkdir -p /srv/media/{ingest,live,archive,backup,quarantine}\ngroupadd mediaops\nchmod 2770 /srv/media/*   # setgid : les nouveaux fichiers héritent automatiquement du groupe" },
+        { "type": "ul", "items": [
+          "Partage Samba ([MediaLab], valid users = @mediaops) simulant comment un vrai pipeline ingestion/transcodage/diffusion monterait le stockage",
+          "UFW configuré en moindre privilège, LAN uniquement",
+          "FIM temps réel activé sur /srv/media dans ossec.conf (report_changes=\"yes\" pour capturer les différences) plus une règle de surveillance auditd correspondante (-w /srv/media -p wa -k media_changes)",
+          "Peuplé avec 100 fichiers factices, puis testé avec un vrai renommage pour confirmer qu'une alerte règle-553 apparaît en quelques secondes"
+        ]},
+        { "type": "callout", "variant": "info", "text": "Cette structure de dossiers exacte — ingestion → direct → archive → sauvegarde → quarantaine — est le substitut concret du vrai pipeline d'un radiodiffuseur, et chaque script d'automatisation de ce laboratoire la cible spécifiquement." }
+      ]
+    },
+    {
+      "id": "python-automation",
+      "title": "Le moteur d'automatisation Python",
+      "blocks": [
+        { "type": "p", "text": "Une arborescence dédiée à /opt/soc-automation/{bin,logs,reports}, son propre venv, délibérément séparé de l'OS et du propre Python de Wazuh — une vraie leçon sur le fait de ne pas créer de conflits de dépendances avec un SIEM en cours d'exécution." },
+        { "type": "h3", "text": "Les scripts, un par effet de bord distinct" },
+        { "type": "table", "headers": ["Script", "Rôle"], "rows": [
+          ["isolate-storage-node.py", "L'orchestrateur — lit l'alerte Wazuh déclenchante depuis stdin, génère un incident_id à résolution microseconde, et appelle les trois scripts ci-dessous"],
+          ["isolate_node.py", "Confinement au niveau réseau — pousse des règles iptables DROP dans les deux directions sur le routeur virtuel, marquées avec l'identifiant d'incident pour une réversion ultérieure"],
+          ["failover_node.py", "Met en quarantaine le conteneur de travail de transcodage affecté et lance un remplaçant sain, pour que la diffusion ne s'interrompe jamais complètement"],
+          ["forensic_alert.py", "Écrit un rapport d'incident JSON structuré en utilisant le hash de fichier déjà calculé par le propre FIM de Wazuh (syscheck.sha256_after) — le manager n'a aucun accès au système de fichiers de l'agent pour le hacher lui-même"],
+          ["measure_latency.py", "Le harnais d'évaluation expérimentale — déclenche un renommage via SSH et mesure le temps réel jusqu'à un nouveau rapport forensique, évitant la contamination par le temps de réaction humain"]
+        ]},
+        { "type": "callout", "variant": "danger", "title": "Le verrou de sécurité REPORT_ONLY", "text": "Chaque script utilise par défaut REPORT_ONLY = True — il journalise exactement ce qu'il ferait (« isolerait l'agent X », « basculerait le conteneur Y ») sans réellement l'exécuter. La règle d'or suivie tout du long : ne jamais basculer en mode d'action réelle avant validation sur de nombreux événements réels et simulés, sans aucun faux positif. Un faux positif ici signifie une déconnexion automatisée et non supervisée d'un vrai nœud." },
+        { "type": "h3", "text": "Deux vrais bugs trouvés en construisant ceci" },
+        { "type": "ul", "items": [
+          "forensic_alert.py renvoyait initialement « unavailable » pour chaque hash de fichier — il tentait de lire un fichier qui n'existe que sur le disque de l'agent, depuis le manager, qui n'a pas cet accès. Corrigé en consommant le hash déjà calculé par le FIM de Wazuh, plutôt que de relire le fichier.",
+          "Un gros collage dans nano a silencieusement supprimé le bloc final `if __name__ == \"__main__\":` d'un script de Réponse Active. wazuh-execd a journalisé « commande envoyée » avec succès, et le script lui-même s'est terminé avec le code 0 et zéro sortie — la signature exacte d'un script qui ne fait que définir des fonctions sans jamais en appeler aucune."
+        ]}
+      ]
+    },
+    {
+      "id": "ansible",
+      "title": "Orchestration Ansible",
+      "blocks": [
+        { "type": "p", "text": "Orchestre les points de terminaison Linux via SSH — la base sur laquelle l'automatisation d'isolement/bascule a été construite, avant même que le câblage de la Réponse Active n'existe." },
+        { "type": "code", "code": "[linux_endpoints]\nvictim-linux ansible_user=tales ansible_host=192.168.178.177\ntales-desktop ansible_user=tales ansible_host=192.168.178.92\nkali-vm ansible_user=kali ansible_host=192.168.178.156" },
+        { "type": "callout", "variant": "warning", "title": "La condition de course sur la phrase secrète", "text": "Si la clé privée SSH a une phrase secrète, les connexions parallèles d'Ansible à plusieurs hôtes se disputent la même invite interactive unique de phrase secrète et échouent de façon imprévisible. Corrigé en déverrouillant la clé une fois via ssh-agent/ssh-add avant d'exécuter toute commande Ansible — après quoi chaque connexion parallèle réutilise l'agent déjà déverrouillé." },
+        { "type": "code", "code": "ansible all -i inventory.ini -m ping" }
+      ]
+    },
+    {
+      "id": "containerlab",
+      "title": "Topologie réseau virtuelle (containerlab)",
+      "blocks": [
+        { "type": "p", "text": "L'écart entre le pare-feu local à l'hôte (UFW, sur soc-server lui-même) et l'exigence du rôle cible de mettre à jour de vrais équipements réseau — pare-feu, switch, routeur — via une API. Comme du vrai matériel réseau de production n'est pas pratique pour s'entraîner, une topologie virtuelle comble l'écart : un routeur virtuel FRRouting (router1), connecté à deux nœuds de stockage (storage-a, storage-b)." },
+        { "type": "callout", "variant": "info", "title": "NETCONF était le plan — jusqu'à ce qu'il ne le soit plus", "text": "La conception initiale utilisait NAPALM/NETCONF pour gérer le routeur virtuel de façon programmatique, correspondant à l'apparence des vraies API d'équipements réseau. L'image FRR utilisée ne fait tourner aucun serveur SSH, écartant totalement cette option. Le substitut pragmatique : docker exec comme « API de gestion » du routeur — fonctionnellement équivalent pour démontrer un contrôle réseau programmatique et non manuel, ce qui comptait pour le cas d'usage d'isolement. Le Cisco DevNet Sandbox est noté comme une option gratuite pour pratiquer du vrai NETCONF/RESTCONF plus tard." },
+        { "type": "p", "text": "C'est exactement ce qu'isolate_node.py utilise en interne : des règles iptables DROP bidirectionnelles, marquées avec l'identifiant d'incident, poussées sur le routeur virtuel via docker exec, avec un jeu de commandes de réversion documenté et symétrique." }
+      ]
+    },
+    {
+      "id": "playbook",
+      "title": "Le playbook de confinement anti-rançongiciel, de bout en bout",
+      "blocks": [
+        { "type": "p", "text": "La chaîne complète, du déclenchement à la résolution — c'est le vrai livrable pour lequel l'offre de stage préparait." },
+        { "type": "ol", "items": [
+          "Déclenchement : la règle Wazuh 100200 (niveau 12) se déclenche sur les événements FIM 550/553/554 sous /srv/media. Un seul renommage produit deux événements FIM (suppression + ajout), tous deux traités indépendamment.",
+          "Isolement : confinement au niveau réseau de l'agent affecté, iptables DROP dans les deux directions, marqué avec l'identifiant d'incident partagé.",
+          "Bascule : le conteneur de travail de transcodage affecté est mis en quarantaine (renommé, jamais supprimé — inspectable et restaurable) et un remplaçant sain est lancé, pour que la « diffusion » ne s'interrompe jamais complètement.",
+          "Rapport forensique : un enregistrement d'incident JSON structuré est écrit, utilisant le hash calculé par le FIM plutôt que de relire le fichier.",
+          "Réversion (testée de bout en bout) : les règles iptables marquées sont supprimées par identifiant d'incident ; le conteneur en quarantaine est restaurable. Validé avec un cycle complet de sauvegarde/restauration — 100 fichiers renommés en masse, puis restaurés depuis un instantané tar.gz pris juste avant l'attaque simulée."
+        ]},
+        { "type": "callout", "variant": "danger", "title": "La règle de sécurité non négociable", "text": "REPORT_ONLY est resté True pour chaque test décrit sur ce site, sans exception. Le basculer en mode d'action réelle est une décision qui n'a jamais été prise à la légère, car un faux positif ici signifie une déconnexion automatisée et non supervisée d'un vrai nœud média en direct." }
+      ]
+    },
+    {
+      "id": "evaluation",
+      "title": "Résultats expérimentaux — mesurés, pas estimés",
+      "blocks": [
+        { "type": "p", "text": "Recueillis avec measure_latency.py, conçu spécifiquement pour éviter de contaminer les résultats avec le temps de réaction humain. Une tentative antérieure de déclenchement manuel avait renvoyé 18,05s et fut écartée — elle mesurait la vitesse de changement de terminal, pas le pipeline." },
+        { "type": "h3", "text": "Latence d'un événement unique (n=10)" },
+        { "type": "stats", "items": [
+          { "label": "Moyenne", "value": "3,00 s" },
+          { "label": "Min", "value": "0,99 s" },
+          { "label": "Max", "value": "4,83 s" },
+          { "label": "Faux positifs", "value": "0 / 10" }
+        ]},
+        { "type": "p", "text": "La distribution est notablement bimodale — environ la moitié des exécutions se regroupe près de 1s, l'autre moitié près de 4s — reflétant très probablement le cycle de traitement interne de wazuh-analysisd : certains événements sont pris en compte presque immédiatement, d'autres attendent le cycle suivant." },
+        { "type": "h3", "text": "Test de rafale — 100 renommages de fichiers simultanés" },
+        { "type": "ul", "items": [
+          "Renommage par lot purement local : 91 ms.",
+          "Temps pour que le manager Wazuh traite complètement les événements FIM résultants : ~2m45s, à environ 1 événement/seconde soutenu.",
+          "Total d'alertes générées : 300, pas les 200 initialement attendues — les 100 en trop étaient des événements « fichier ajouté » en retard, issus de la création initiale des fichiers de test, mis en file derrière la rafale.",
+          "La charge système est restée sous 1,5 tout du long — confirmant que le goulot d'étranglement était le débit de traitement de wazuh-analysisd/syscheckd sur du matériel à 2 cœurs, pas une saturation CPU."
+        ]},
+        { "type": "callout", "variant": "danger", "title": "Le bug le plus significatif trouvé dans tout le projet", "text": "La Réponse Active s'est déclenchée environ 300 fois, mais seulement environ 100 rapports forensiques uniques ont été écrits. Cause racine : incident_id utilisait une résolution d'horodatage à la seconde, donc plusieurs événements réellement distincts atterrissaient sur le même identifiant dans la même seconde, et chaque invocation de forensic_alert.py écrasait silencieusement le rapport JSON précédent pour cet identifiant — une vraie perte de preuves, exactement au moment (une attaque massive) où cela compterait le plus. Corrigé avec des identifiants à résolution microseconde, générés une seule fois par l'orchestrateur et transmis à chaque script en aval au lieu que chacun génère le sien. Revalidé avec un lot de 20 fichiers : zéro collision." },
+        { "type": "p", "text": "Enseignement : la latence d'un événement unique, de l'ordre de quelques secondes, est assez rapide pour détecter et contenir un événement menaçant le signal en direct, largement dans les limites d'une exigence réaliste. Le plafond de débit du test de rafale et le bug d'identifiant d'incident sont les découvertes les plus intéressantes en termes de maturité d'ingénierie — ce qui casse sous une attaque réaliste multi-fichiers, pas seulement le cas nominal à un seul fichier." }
+      ]
+    },
+    {
+      "id": "sample-incident",
+      "title": "Le schéma du rapport forensique",
+      "blocks": [
+        { "type": "p", "text": "Un vrai rapport généré par forensic_alert.py pendant les tests — le schéma que chaque script en aval produit et consomme, conçu une fois et réutilisé partout :" },
+        { "type": "code", "lang": "json", "code": "{\n  \"incident_id\": \"INC-20260802-091550\",\n  \"detected_utc\": \"2026-08-02T09:15:50.947161+00:00\",\n  \"detecting_host\": \"soc-server\",\n  \"source_ip\": \"192.168.178.177\",\n  \"affected_path\": \"/srv/media/ingest/teste_diagnostico4.txt\",\n  \"file_sha256\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n  \"triggering_rule_id\": \"100200\",\n  \"action_taken\": \"isolate+failover (report-only)\",\n  \"playout_impact\": \"none\",\n  \"status\": \"open\",\n  \"next_steps\": \"review in SOC dashboard, confirm containment, RCA\"\n}" },
+        { "type": "p", "text": "Le champ playout_impact est délibéré : il suit directement l'exigence non fonctionnelle centrale du rôle cible — si le signal de diffusion en direct a été affecté — et vaut toujours « none » par conception, puisque la bascule maintient un worker actif en permanence." }
+      ]
+    },
+    {
+      "id": "asset-inventory",
+      "title": "Inventaire des actifs",
+      "blocks": [
+        { "type": "p", "text": "Chaque machine du laboratoire, suivie en un seul endroit — incluant délibérément une machine en rôle attaquant et un ajout macOS hors du périmètre initial, pour démontrer une conscience des angles morts de couverture plutôt que de les cacher." },
+        { "type": "table", "headers": ["Nom d'hôte", "Rôle", "Pile de détection"], "rows": [
+          ["soc-server", "Manager/indexeur/tableau de bord Wazuh + Suricata + hôte d'automatisation", "Manager Wazuh"],
+          ["victim-linux", "Nœud de stockage média (Samba + FIM /srv/media)", "Agent Wazuh + auditd + FIM temps réel"],
+          ["win10-vm / win-server-vm", "Points de terminaison Windows", "Agent Wazuh + Sysmon"],
+          ["kali-vm / kali-msi-laptop", "Points de terminaison / machines en rôle attaquant", "Agent Wazuh + auditd"],
+          ["tales-desktop", "Point de terminaison, cible principale du traitement des CVE", "Agent Wazuh + auditd"],
+          ["mac-laptop", "Point de terminaison additionnel, hors périmètre initial", "Agent Wazuh (FIM planifié uniquement — limitation documentée)"]
+        ]}
+      ]
+    },
+    {
+      "id": "agent-lifecycle",
+      "title": "Retirer et remplacer des agents proprement",
+      "blocks": [
+        { "type": "p", "text": "Utilisé chaque fois qu'une VM est réinstallée ou recréée et doit se réenregistrer — ou quand une machine est retirée définitivement." },
+        { "type": "ol", "items": [
+          "Identifier l'agent obsolète via agent_control -l.",
+          "Retirer d'abord l'ancien enregistrement côté manager — via le tableau de bord (Agents management → Delete) ou la CLI manage_agents — avant de générer une nouvelle commande d'installation sur la même machine.",
+          "Si la machine est retirée définitivement, désinstaller aussi complètement l'agent en local."
+        ]},
+        { "type": "callout", "variant": "warning", "text": "Sauter l'étape de retrait avant de réinstaller sur la même machine produit « Agent key already in use » — une vraie erreur, reproductible, rencontrée sur presque chaque VM réutilisée de ce laboratoire." }
+      ]
+    }
+  ]
+}

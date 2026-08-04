@@ -1,0 +1,83 @@
+{
+  "title": "Technologies",
+  "subtitle": "Chaque outil ici a été choisi pour une raison précise, et poussé assez loin pour trouver ses vraies limites.",
+  "core": {
+    "title": "Le socle technique",
+    "items": [
+      {
+        "id": "wazuh",
+        "name": "Wazuh",
+        "tagline": "SIEM / XDR — le cerveau du laboratoire",
+        "description": "SIEM open-source qui centralise les logs de chaque poste, exécute la surveillance d'intégrité des fichiers (FIM), corrèle les événements en règles, suit les CVE des paquets installés, et déclenche l'automatisation de réponse active. Tout le reste dans ce laboratoire alimente Wazuh ou réagit à lui.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "suricata",
+        "name": "Suricata",
+        "tagline": "IDS/IPS réseau — déployé 8 fois, pas une seule",
+        "description": "Détection d'intrusion réseau à base de signatures. Commencé comme une sonde unique sur le serveur SIEM, qui s'est révélée avoir un véritable angle mort architectural — le trafic entre deux autres machines du LAN lui était invisible. Corrigé en installant une sonde indépendante sur chaque machine plutôt que de dépendre d'un port-miroir.",
+        "hasDeepDive": true,
+        "deepDiveLabel": "Voir l'histoire complète sur la page Wazuh"
+      },
+      {
+        "id": "thehive",
+        "name": "TheHive",
+        "tagline": "Gestion de cas / SOAR",
+        "description": "Là où les alertes deviennent des enquêtes. Chaque alerte Wazuh de niveau 7 ou plus est poussée ici automatiquement via un script d'intégration personnalisé, et quatre modèles de cas standardisent la façon dont un scan de ports, une tentative de force brute, un événement de rançongiciel ou une CVE sont traités.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "cortex",
+        "name": "Cortex",
+        "tagline": "Moteur d'enrichissement des observables",
+        "description": "Associé à TheHive : prend une IP, un hash ou un domaine d'un cas et interroge automatiquement AbuseIPDB et VirusTotal pour des données de réputation. Faire fonctionner cela dans du Docker-dans-Docker a été l'une des sessions de débogage les plus poussées de tout le projet.",
+        "hasDeepDive": true
+      }
+    ]
+  },
+  "supporting": {
+    "title": "Les seconds rôles",
+    "items": [
+      {
+        "name": "Sysmon",
+        "description": "Télémétrie Windows détaillée (création de processus, connexions réseau, modifications du registre) alimentant Wazuh depuis les deux points de terminaison Windows — l'équivalent côté Windows d'auditd."
+      },
+      {
+        "name": "auditd",
+        "description": "Journalisation d'audit au niveau du noyau Linux — changements d'identité, élévation de privilèges, modifications de la config SSH, et la surveillance FIM sur le chemin de stockage média simulé."
+      },
+      {
+        "name": "Emerging Threats Open",
+        "description": "Le jeu de signatures utilisé par Suricata — environ 52 000 règles sur les sondes Linux, affiné avec une règle personnalisée pour filtrer le bruit de diffusion des objets IoT du réseau domestique."
+      },
+      {
+        "name": "Python 3",
+        "description": "Un moteur d'automatisation dédié (isolé dans son propre venv) implémentant la chaîne isoler → basculer → rapport forensique, ainsi que le harnais de mesure de latence utilisé pour les résultats expérimentaux présentés sur ce site."
+      },
+      {
+        "name": "Ansible",
+        "description": "Orchestre les points de terminaison Linux via SSH — la base sur laquelle l'automatisation d'isolement/bascule a été construite."
+      },
+      {
+        "name": "containerlab + FRRouting",
+        "description": "Une topologie réseau virtuelle (un routeur, deux nœuds de stockage) utilisée pour simuler un isolement au niveau des équipements réseau via docker exec + iptables, après que l'image du routeur cible s'est révélée n'exposer ni SSH ni NETCONF."
+      },
+      {
+        "name": "Samba",
+        "description": "Service de partage de fichiers simulant la structure de dossiers ingestion/direct/archive/quarantaine du nœud de stockage média."
+      },
+      {
+        "name": "Ubuntu Pro / ESM",
+        "description": "Maintenance de sécurité étendue gratuite pour usage personnel — utilisée pour corriger 9 CVE sur freerdp2, ffmpeg et cJSON qui n'avaient pas de correctif dans le canal Ubuntu 24.04 standard."
+      },
+      {
+        "name": "VirtualBox",
+        "description": "Hyperviseur exécutant chaque VM du laboratoire : les deux points de terminaison Windows, l'une des deux machines Kali, et le serveur dédié TheHive/Cortex."
+      },
+      {
+        "name": "Docker / Docker Compose",
+        "description": "Fait tourner toute la pile TheHive + Cortex + Cassandra + Elasticsearch, ainsi que la topologie virtuelle containerlab et la simulation d'isolement/bascule."
+      }
+    ]
+  }
+}

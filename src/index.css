@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light theme (default) */
+  --color-bg: #f7f7fb;
+  --color-bg-alt: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-fg: #1e1f29;
+  --color-fg-muted: #5a5c72;
+  --color-border: #e2e2ec;
+  --color-accent: #7c3aed;
+  --color-accent-2: #0891b2;
+  --color-pink: #c026a3;
+  --color-green: #15803d;
+  --color-cyan: #0e7490;
+  --color-orange: #c2410c;
+  --color-red: #dc2626;
+  --color-yellow: #a16207;
+}
+
+.dark {
+  /* Dracula theme */
+  --color-bg: #21222c;
+  --color-bg-alt: #282a36;
+  --color-bg-elevated: #343746;
+  --color-fg: #f8f8f2;
+  --color-fg-muted: #a9adc9;
+  --color-border: #44475a;
+  --color-accent: #bd93f9;
+  --color-accent-2: #8be9fd;
+  --color-pink: #ff79c6;
+  --color-green: #50fa7b;
+  --color-cyan: #8be9fd;
+  --color-orange: #ffb86c;
+  --color-red: #ff5555;
+  --color-yellow: #f1fa8c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+::selection {
+  background-color: var(--color-accent);
+  color: var(--color-bg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-fg-muted);
+}
+
+code, pre {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+pre {
+  overflow-x: auto;
+}
+
+.prose-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  color: var(--color-accent);
+}
+
+.prose-content h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-fg);
+}
+
+.prose-content p {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+  color: var(--color-fg-muted);
+}
+
+.prose-content ul, .prose-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+  color: var(--color-fg-muted);
+}
+
+.prose-content li {
+  margin-bottom: 0.4rem;
+  line-height: 1.6;
+}
+
+.prose-content strong {
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+.prose-content code {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  font-size: 0.85em;
+  color: var(--color-pink);
+}

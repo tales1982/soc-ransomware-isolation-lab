@@ -1,0 +1,100 @@
+{
+  "title": "Installation & Architecture",
+  "subtitle": "Comment un vieux portable est devenu un SIEM, et l'ordre dans lequel tout a été construit.",
+  "hardware": {
+    "title": "La contrainte matérielle qui a tout façonné",
+    "intro": "Le serveur SIEM (« soc-server ») est un portable Toshiba Satellite C670D-12Q — rien à voir avec ce sur quoi tournerait un SIEM en production. Cette contrainte est délibérée : elle force chaque constat de performance et de fiabilité sur ce site à être réel, pas théorique.",
+    "specs": [
+      { "label": "CPU", "value": "2 cœurs, x86-64 — le principal goulot d'étranglement de tout le laboratoire" },
+      { "label": "RAM", "value": "~8 Go" },
+      { "label": "Stockage", "value": "~1 To de disque mécanique (HGST), pas de SSD" },
+      { "label": "Réseau", "value": "Ethernet Realtek, BIOS Legacy (pas d'UEFI)" },
+      { "label": "Méthode de démarrage", "value": "Installation PXE/netboot — le matériel ne peut pas démarrer depuis une clé USB ou un DVD" }
+    ],
+    "partitioning": {
+      "title": "Découpage du disque (LVM)",
+      "items": [
+        "/boot — 2 Go",
+        "/ — 100 Go",
+        "/var — 700 Go, dédié au stockage des index et logs du SIEM",
+        "/home — 100 Go"
+      ]
+    }
+  },
+  "network": {
+    "title": "Réseau",
+    "items": [
+      "LAN domestique, 192.168.178.0/24, derrière un routeur FRITZ!Box 7530 AX",
+      "soc-server dispose d'une réservation DHCP permanente",
+      "Pare-feu UFW sur chaque hôte Linux/serveur : refus par défaut du trafic entrant, SSH limité au LAN, ports Wazuh (443/1514/1515/55000) restreints au sous-réseau local"
+    ]
+  },
+  "architecture": {
+    "title": "Les 9 machines",
+    "intro": "Un mélange de matériel physique et de VM VirtualBox, couvrant délibérément trois systèmes d'exploitation et incluant à la fois une machine « attaquant » et un ajout macOS hors du périmètre initial — pour démontrer une conscience des angles morts de couverture plutôt que de les cacher.",
+    "table": {
+      "headers": ["Machine", "OS", "Rôle"],
+      "rows": [
+        ["soc-server", "Ubuntu Server 24.04.4 LTS (physique)", "Manager + indexeur + tableau de bord Wazuh, Suricata, automatisation Python, nœud de contrôle Ansible"],
+        ["victim-linux", "Ubuntu 26.04", "Nœud de stockage média simulé : partages Samba (ingestion/direct/archive/sauvegarde/quarantaine), FIM + auditd, cible de la réponse active"],
+        ["tales-desktop", "Ubuntu 24.04.4 (physique)", "Point de terminaison, auditd, sonde Suricata — cible principale de la campagne de traitement des CVE"],
+        ["kali-vm", "Kali Linux (VM)", "Point de terminaison / machine en rôle attaquant, auditd, sonde Suricata"],
+        ["kali-msi-laptop", "Kali GNU/Linux (physique)", "Point de terminaison / machine en rôle attaquant, auditd, sonde Suricata"],
+        ["win10-vm", "Windows 10 Pro (VM)", "Point de terminaison, Sysmon, sonde Suricata"],
+        ["win-server-vm", "Windows Server 2019 (VM)", "Point de terminaison, Sysmon, sonde Suricata, Active Directory"],
+        ["mac-laptop", "macOS (physique)", "Point de terminaison (FIM planifié uniquement), Suricata via Homebrew"],
+        ["thehive-vm", "Ubuntu Server 24.04.4 LTS (VM, 8 Go/4 vCPU/80 Go)", "TheHive 5.2 + Cortex 3.1.8 + Cassandra + Elasticsearch via Docker Compose"]
+      ]
+    }
+  },
+  "order": {
+    "title": "Intégrer une nouvelle machine : la checklist réellement utilisée",
+    "intro": "Chaque machine du laboratoire suit la même séquence, documentée une fois et réutilisée plutôt que redéfinie à chaque fois.",
+    "steps": [
+      {
+        "title": "1. La connecter à Wazuh",
+        "text": "Configurer le réseau (mode Bridged pour les VM, jamais NAT — sinon la machine n'atterrit jamais sur le vrai sous-réseau LAN), tester la connectivité vers le manager sur les ports 1514/1515, vérifier l'absence d'un enregistrement d'agent résiduel d'une image précédente (ce seul point a causé des reprises sur presque chaque VM réutilisée), puis exécuter la commande d'installation générée par le tableau de bord. Ne continuer que lorsque l'agent affiche Active."
+      },
+      {
+        "title": "2A. Windows → Sysmon",
+        "text": "Vérifier une installation préexistante, télécharger uniquement depuis la source officielle Microsoft Sysinternals, installer avec une configuration cartographiée MITRE (SwiftOnSecurity/olafhartong), relier les canaux Sysmon + PowerShell-Operational dans ossec.conf, valider sur le tableau de bord."
+      },
+      {
+        "title": "2B. Linux → auditd",
+        "text": "Installer, créer les règles de surveillance identité/privilèges/SSH, tester avec ausearch, activer le FIM en temps réel. Un vrai piège : le premier `touch` sur un fichier surveillé avant l'activation du FIM temps réel ne devient que la référence de base — il ne déclenche aucune alerte. Il faut retoucher le fichier après le redémarrage de l'agent pour voir la vraie détection."
+      },
+      {
+        "title": "2C. macOS",
+        "text": "Aucun outillage dédié n'existe ici — un manque documenté intentionnellement. macOS n'a ni auditd ni Sysmon, donc seul le FIM natif de l'agent Wazuh est disponible, et il bascule silencieusement en scan planifié pour certains dossiers, avec des délais de détection de plusieurs heures, inexpliqués."
+      },
+      {
+        "title": "3. Le consigner",
+        "text": "Une ligne dans le journal de construction suffit normalement (nom, type, OS, date). Une description complète n'est justifiée que si une erreur véritablement nouvelle est trouvée — pas déjà couverte par un guide existant."
+      },
+      {
+        "title": "4. (Conditionnel) Retirer un agent obsolète",
+        "text": "Utilisé lors d'une réinstallation sur la même machine (l'ancien enregistrement côté manager doit être supprimé en premier, sinon la nouvelle installation échoue avec « Agent key already in use ») ou lors du retrait définitif d'une machine."
+      }
+    ]
+  },
+  "phases": {
+    "title": "Le plan de construction en 17 phases",
+    "intro": "16 des 17 phases prévues ont été menées à terme (la Phase 16 — support de sauvegarde physique — a été explicitement écartée faute de matériel externe, et documentée comme telle plutôt que silencieusement abandonnée). Le plan lui-même a commencé comme un exercice de traçabilité exigence par exigence — chaque capacité nommée dans le poste ciblé (corrélation de logs, surveillance équivalente à un EDR, une couche de réponse façon SOAR, automatisation Python, API d'équipements réseau) a été associée à une phase précise avant même le début de l'installation, et les phases 10 à 14 existent spécifiquement pour couvrir des exigences qui n'avaient encore aucun équivalent. Voici la chronologie condensée ; le récit complet — avec chaque bug — se trouve dans les pages Technologies.",
+    "items": [
+      { "phase": "3", "title": "Installation du manager Wazuh", "note": "Deux vrais bugs : un délai d'expiration systemd au démarrage sur la machine à 2 cœurs, et un bug connu en amont sur les identifiants API" },
+      { "phase": "4", "title": "Premier point de terminaison Windows", "note": "Windows Installer a silencieusement conservé une ancienne version d'agent — 4.12.0 au lieu du 4.14.7 tout juste installé" },
+      { "phase": "5", "title": "Second point de terminaison Linux (Kali)", "note": "Bug de profil de pont NetworkManager — liaison active, pas d'IP, ne survivait pas au redémarrage" },
+      { "phase": "6", "title": "Serveur de stockage média", "note": "Partages Samba, FIM, premier test de renommage simulant un comportement de rançongiciel" },
+      { "phase": "7", "title": "IDS Suricata — sonde unique", "note": "S'est révélé avoir un véritable angle mort architectural (voir Wazuh → Sécurité réseau)" },
+      { "phase": "8", "title": "Moteur d'automatisation Python", "note": "Rapport d'incident, isolement, bascule, alerte forensique, mesure de latence" },
+      { "phase": "9", "title": "Orchestration Ansible", "note": "Condition de course sur la phrase secrète de la clé SSH entre hôtes parallèles" },
+      { "phase": "10", "title": "Topologie réseau virtuelle (containerlab)", "note": "NETCONF abandonné pour docker exec + iptables, l'image du routeur n'exposant ni SSH ni NETCONF" },
+      { "phase": "11", "title": "Câblage de la réponse active", "note": "Chasse à un blocage sur plusieurs jours — un appel stdin.read() bloqué indéfiniment sur le pipe de réponse de Wazuh, laissé ouvert en permanence" },
+      { "phase": "12", "title": "Simulation de bascule", "note": "Remplacement par un nœud sain pour que la « diffusion » ne s'interrompe jamais complètement" },
+      { "phase": "13", "title": "Alerte forensique", "note": "Un bloc `if __name__ == \"__main__\":` perdu pendant une édition dans nano a produit un script silencieusement inopérant" },
+      { "phase": "14", "title": "Mesure de latence", "note": "Première tentative (18,05s) invalide — elle mesurait le temps de réaction humain, pas le pipeline" },
+      { "phase": "15", "title": "Simulation de rançongiciel à grande échelle", "note": "Le bug de collision d'identifiant d'incident — la découverte la plus significative de tout le projet" },
+      { "phase": "17", "title": "Assemblage du portfolio", "note": "Suivi d'une phase bonus étendue : gestion des CVE, déploiement Suricata sur 8 sondes, TheHive + Cortex" }
+    ]
+  }
+}

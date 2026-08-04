@@ -1,0 +1,42 @@
+{
+  "title": "About",
+  "me": {
+    "title": "About me",
+    "name": "Tales Lima de Paula",
+    "tagline": "Blue Team / SOC — built this lab from a repurposed laptop and a home network.",
+    "bioPlaceholder": "[Add a short bio here — background, what draws you to defensive security, and what you're looking for next.]",
+    "contactNote": "[Add your contact links here — email, LinkedIn, GitHub.]",
+    "editHint": "This block is intentionally a template — edit src/i18n/locales/{en,fr}/about.json directly to add your own bio and contact details."
+  },
+  "project": {
+    "title": "About this project",
+    "paragraphs": [
+      "This lab was built as direct, hands-on preparation for an internship posting focused on automated air-gap and ransomware isolation for media storage networks — the kind of infrastructure that runs behind a broadcaster's ingest, transcoding and playout pipeline. Rather than studying the topic from the outside, the goal was to build the actual system: a simulated media storage node, a real SIEM watching it, and an automated containment chain triggered by a real detection rule.",
+      "Every technical claim on this site is backed by something that actually ran on real hardware: a repurposed 2-core laptop as the SIEM server, a mix of physical machines and VMs across Windows, Linux and macOS, and a genuinely underpowered network that forced real engineering trade-offs instead of clean textbook ones.",
+      "The scope grew past the original 17-phase plan once the core detection-and-response chain was working: a full CVE vulnerability-management campaign (24 real CVEs, each with a documented fix/mitigate/accept decision), an 8-sensor Suricata network rollout after discovering a real visibility blind spot, and a complete TheHive + Cortex case-management layer wired directly into Wazuh.",
+      "Nothing here uses real malware. Every ransomware-behavior test is a safe file rename or a scoped OpenSSL encryption test on disposable data, always with a backup taken first and a documented restore step. The automation itself was built with a REPORT_ONLY safety flag and never flipped to live-action mode until validated across many events with zero false positives."
+    ]
+  },
+  "approach": {
+    "title": "How this was learned, not just built",
+    "intro": "Every unfamiliar area — networking APIs, IR frameworks, Ansible internals — was studied on a fixed weekly rhythm before being built, not figured out ad hoc while building.",
+    "roadmap": [
+      { "week": "Week 1", "focus": "Linux fundamentals — permissions, systemd, LVM, Netplan" },
+      { "week": "Week 2", "focus": "Networking I — TCP/IP, VLANs, SDN concepts" },
+      { "week": "Week 3", "focus": "SIEM/SOAR concepts and the MITRE ATT&CK framework" },
+      { "week": "Week 4", "focus": "Python for automation — hashlib, json, pathlib, subprocess, requests" },
+      { "week": "Week 5", "focus": "Network APIs — NETCONF vs SNMP vs CLI/REST, NAPALM/Netmiko/ncclient" },
+      { "week": "Week 6", "focus": "Ansible — playbooks, idempotence, and Active Response internals" },
+      { "week": "Week 7", "focus": "Incident response — the NIST SP 800-61 cycle, forensic report structure" },
+      { "week": "Week 8", "focus": "Evaluation methodology and interview preparation" }
+    ],
+    "rhythm": "Roughly one hour of theory plus two hours of hands-on practice per weekday, with a standing habit of recording a short demo video every Friday.",
+    "pitchTitle": "The 3-minute way to explain this project",
+    "pitch": [
+      { "part": "Problem (30s)", "text": "A media pipeline needs automated ransomware detection and containment without disrupting the live broadcast signal." },
+      { "part": "Approach (60s)", "text": "A real SIEM (Wazuh) watches a simulated media storage node; a custom rule fires a Python automation chain: isolate, fail over, forensic report — all sharing one incident ID." },
+      { "part": "Result (60s)", "text": "3.00s average detection-to-report latency across 10 real runs, 0 false positives — plus a real data-loss bug found and fixed under a 100-file burst load test." },
+      { "part": "Limitations & next steps (30s)", "text": "Tested on 2-core hardware with real throughput ceilings; REPORT_ONLY mode never flipped to live action; next step would be extending validation to sustained multi-hour load." }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "title": "TheHive",
+  "subtitle": "Gestion de cas / SOAR — là où une alerte Wazuh devient une enquête suivie.",
+  "intro": [
+    { "type": "p", "text": "Wazuh détecte et corrèle ; il n'a aucune notion de « cas », d'analyste assigné, ou de liste de tâches. TheHive est la couche au-dessus : chaque alerte de niveau 7 ou plus y est poussée automatiquement, où elle peut être triée, promue en cas via un modèle standardisé, et traitée tâche par tâche." },
+    { "type": "p", "text": "Il tourne sur sa propre VM dédiée (thehive-vm, 8 Go RAM / 4 vCPU / 80 Go, en pont sur le même LAN que tous les autres agents), sous forme de pile Docker Compose : TheHive 5.2, Cortex 3.1.8, Cassandra 4.1 pour le stockage, et Elasticsearch 7.17.13 comme index de recherche partagé." }
+  ],
+  "sections": [
+    {
+      "id": "install",
+      "title": "Installer la pile",
+      "blocks": [
+        { "type": "p", "text": "Quatre services, un seul docker-compose.yml. Cassandra et Elasticsearch démarrent en premier, puis Cortex, puis TheHive en dernier — TheHive a besoin d'une clé API Cortex fonctionnelle déjà présente dans sa config avant de démarrer utilement." },
+        { "type": "code", "lang": "yaml", "code": "services:\n  cassandra:\n    image: cassandra:4.1\n    environment:\n      - MAX_HEAP_SIZE=1G\n      - HEAP_NEWSIZE=1G\n      - CASSANDRA_CLUSTER_NAME=thp\n\n  elasticsearch:\n    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13\n    environment:\n      - discovery.type=single-node\n      - xpack.security.enabled=false\n      - \"ES_JAVA_OPTS=-Xms1g -Xmx1g\"\n\n  cortex:\n    image: thehiveproject/cortex:3.1.8\n    depends_on: [elasticsearch]\n    ports: [\"9001:9001\"]\n    volumes:\n      - ./cortex/application.conf:/etc/cortex/application.conf\n      - /var/run/docker.sock:/var/run/docker.sock\n\n  thehive:\n    image: strangebee/thehive:5.2\n    depends_on: [cassandra, elasticsearch, cortex]\n    ports: [\"9000:9000\"]\n    volumes:\n      - ./thehive/application.conf:/etc/thehive/application.conf" },
+        { "type": "callout", "variant": "info", "title": "Un piège au niveau de l'hôte avant que quoi que ce soit ne fonctionne", "text": "Elasticsearch exige le paramètre noyau `vm.max_map_count >= 262144` sur la VM hôte réelle, défini via /etc/sysctl.d/ avant que les conteneurs puissent démarrer — une correction au seul niveau du conteneur ne suffit pas." },
+        { "type": "p", "text": "Au premier démarrage, TheHive importe automatiquement 707 techniques MITRE ATT&CK — la même taxonomie déjà utilisée dans les alertes Wazuh et les modèles de cas de ce site." }
+      ]
+    },
+    {
+      "id": "orgs-users",
+      "title": "Organisations et utilisateurs — la leçon la plus importante",
+      "blocks": [
+        { "type": "callout", "variant": "danger", "title": "L'organisation par défaut est un piège", "text": "TheHive et Cortex sont tous deux livrés avec une organisation par défaut réservée (« admin » dans TheHive, « cortex » dans Cortex) destinée uniquement à l'administration de la plateforme — créer d'autres organisations et utilisateurs. Ce n'est pas là que le vrai travail se fait, et elle ne peut délibérément pas faire de vrai travail : un utilisateur de cette organisation ne peut pas détenir les rôles nécessaires pour créer des alertes, activer des analyseurs, ou gérer des cas. Le premier appel API réel contre elle a échoué avec un `403 — you don't have the permission manageAlert/create` sans détour, ce qui est exactement le comportement voulu de la plateforme, pas un bug." },
+        { "type": "p", "text": "La correction est la même dans les deux outils : créer une seconde organisation de travail réelle (ce laboratoire utilise `soc-lab` dans TheHive et Cortex), et à l'intérieur créer deux types de comptes — un compte analyste normal, avec mot de passe, pour les humains, et un compte de type Service s'authentifiant uniquement par clé API pour l'automatisation." },
+        { "type": "h3", "text": "TheHive : créer l'organisation de travail" },
+        { "type": "ol", "items": [
+          "Se connecter avec le compte superadmin initial admin@thehive.local (Organisations → l'organisation admin réservée).",
+          "Organisations → + → créer une nouvelle organisation, par ex. soc-lab.",
+          "Dans soc-lab → Users → Add User → un compte normal avec le profil org-admin, un vrai mot de passe, utilisé pour l'investigation quotidienne.",
+          "Un second utilisateur de type Service (par ex. wazuh-integration@soc-lab.local) avec le profil analyst, sans mot de passe — uniquement une clé API — utilisé exclusivement par le script d'intégration Wazuh."
+        ]},
+        { "type": "h3", "text": "Cortex : exactement le même schéma, une terminologie différente" },
+        { "type": "p", "text": "Cortex utilise des cases à cocher de rôles granulaires plutôt qu'une seule liste déroulante de profil : read, analyze, orgAdmin. Un utilisateur de l'organisation de travail a besoin des trois pour parcourir et activer des analyseurs depuis le catalogue — le sélecteur de rôle de l'organisation par défaut réservée ne propose jamais que « superadmin », ce qui est justement le signe qu'on se trouve dans la mauvaise organisation." }
+      ]
+    },
+    {
+      "id": "case-templates",
+      "title": "Quatre modèles de cas standardisés",
+      "blocks": [
+        { "type": "p", "text": "Plutôt que de démarrer chaque investigation depuis un cas vide, quatre modèles ont été créés via l'API (un court script Python n'utilisant que urllib de la bibliothèque standard, sans dépendance externe) afin que toute alerte puisse être promue directement en une liste de tâches structurée." },
+        { "type": "table", "headers": ["Modèle", "Sévérité", "Tâches"], "rows": [
+          ["Port Scan / Network Reconnaissance", "Moyenne", "6 — confirmer source/destination, cartographier vers MITRE T1046/T1595.002, vérifier machine autorisée, décider clôture ou escalade"],
+          ["SSH Brute-force Investigation", "Élevée", "7 — compter les tentatives, cartographier vers T1110.001/003, vérifier une connexion réussie après des échecs, forcer une réinitialisation si compromis"],
+          ["Ransomware / FIM Critical Alert", "Critique", "8 — identifier les fichiers affectés, T1486/T1490, isoler l'hôte, préserver les preuves, identifier le patient zéro, restaurer depuis la sauvegarde"],
+          ["CVE / Vulnerability Triage", "Moyenne", "7 — reflète délibérément le même flux correction/atténuation/acceptation utilisé pour les 24 vraies CVE de la page Gestion des CVE"]
+        ]},
+        { "type": "callout", "variant": "tip", "text": "La dernière tâche du modèle CVE est littéralement « créer/mettre à jour le fichier dans le dossier du dépôt vulnerabilidades/ » — le flux de gestion de cas et l'habitude de documentation réelle sont le même processus, pas deux choses séparées." }
+      ]
+    },
+    {
+      "id": "wazuh-integration",
+      "title": "Connecter Wazuh à TheHive",
+      "blocks": [
+        { "type": "p", "text": "Wazuh n'a aucun connecteur TheHive intégré. Le pont utilise le propre mécanisme d'intégration personnalisée de Wazuh (wazuh-integratord), qui appelle un script à chaque alerte correspondant à un niveau configuré, en passant le chemin du fichier d'alerte plus une clé API et une URL de webhook en arguments." },
+        { "type": "code", "lang": "xml", "code": "<integration>\n  <name>custom-thehive</name>\n  <hook_url>http://192.168.178.164:9000</hook_url>\n  <api_key>...</api_key>\n  <alert_format>json</alert_format>\n  <level>7</level>\n</integration>" },
+        { "type": "p", "text": "Le script lui-même (un script shell d'enveloppe plus un fichier Python, le schéma standard pour toutes les intégrations Wazuh personnalisées) lit le JSON de l'alerte, fait correspondre le rule.level de Wazuh à une sévérité TheHive (1–4), et envoie un POST à l'API de création d'alerte de TheHive avec un jeton Bearer." },
+        { "type": "h3", "text": "Deux vrais bugs sur le chemin d'une intégration fonctionnelle" },
+        { "type": "ul", "items": [
+          "L'éditeur de ligne du terminal corrompait silencieusement les gros heredocs collés contenant des accolades (courantes dans les f-strings Python). Contourné en encodant tout le script en base64 localement et en le décodant en une seule ligne sur l'hôte distant — totalement immunisé contre l'interprétation de caractères par le shell/éditeur.",
+          "Le premier test en direct a renvoyé un HTTP 403 avec la même erreur de permission manageAlert/create décrite plus haut — en utilisant la clé API de l'organisation admin réservée au lieu d'une clé de l'organisation de travail. Basculer vers une clé API scoped à soc-lab a immédiatement corrigé le problème."
+        ]},
+        { "type": "callout", "variant": "info", "title": "Validation", "text": "Une alerte de test manuelle a renvoyé un HTTP 201 — et en quelques minutes, de vraies alertes Wazuh (un événement « Listened ports status changed » et une anomalie rootcheck) sont apparues dans la file de TheHive sans aucune action manuelle supplémentaire, confirmant que le démon integratord appelait correctement le script en production, pas seulement lors du test manuel." }
+      ]
+    }
+  ]
+}

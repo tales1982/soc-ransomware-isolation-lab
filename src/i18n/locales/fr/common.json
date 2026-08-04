@@ -1,0 +1,55 @@
+{
+  "site": {
+    "title": "SOC Lab",
+    "subtitle": "Portfolio Blue Team & Isolation Anti-Rançongiciel"
+  },
+  "nav": {
+    "home": "Aperçu",
+    "installation": "Installation",
+    "technologies": "Technologies",
+    "wazuh": "Wazuh",
+    "thehive": "TheHive",
+    "cortex": "Cortex",
+    "automation": "Automatisation",
+    "vulnerabilities": "Gestion des CVE",
+    "exercises": "Exercices",
+    "about": "À propos"
+  },
+  "actions": {
+    "toggleTheme": "Changer de thème",
+    "toggleLanguage": "Changer de langue",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "readMore": "Lire la suite",
+    "backToTop": "Retour en haut",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "reset": "Réinitialiser la progression",
+    "viewOnGithub": "Voir sur GitHub"
+  },
+  "footer": {
+    "builtWith": "Construit avec React, Redux Toolkit, i18next et Tailwind CSS.",
+    "rights": "Toutes les données présentées ici proviennent d'un vrai laboratoire personnel, construit à la main."
+  },
+  "labels": {
+    "difficulty": "Difficulté",
+    "time": "Durée",
+    "tools": "Outils",
+    "mitre": "MITRE ATT&CK",
+    "risk": "Risque",
+    "category": "Catégorie",
+    "status": "Statut",
+    "severity": "Sévérité",
+    "package": "Paquet",
+    "agent": "Agent",
+    "easy": "Facile",
+    "medium": "Moyen",
+    "hard": "Difficile",
+    "low": "Faible",
+    "high": "Élevé",
+    "critical": "Critique",
+    "fixed": "Corrigé",
+    "accepted": "Risque accepté",
+    "mitigated": "Atténué"
+  }
+}

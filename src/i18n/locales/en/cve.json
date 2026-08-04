@@ -1,0 +1,48 @@
+{
+  "title": "CVE Management",
+  "subtitle": "24 real vulnerabilities, triaged one by one — not just scanned and forgotten.",
+  "intro": [
+    { "type": "p", "text": "Wazuh's Vulnerability Detection module flags CVEs against installed packages automatically. The scanning part is the easy part. What actually matters — and what this page documents — is the decision made for each one: fix it, mitigate it, or formally accept the risk, with a written reason either way." },
+    { "type": "callout", "variant": "info", "title": "The theme running through every single case", "text": "A CVSS score alone was treated as insufficient every time. Every entry pairs the vendor severity score with an actual-usage check — is the vulnerable kernel module even loaded? Is the package manually installed or just a stray dependency? Is the affected architecture even in use here? — before deciding what to do about it." }
+  ],
+  "methodology": {
+    "title": "The five-step process used on every CVE",
+    "steps": [
+      { "title": "1. Identify", "text": "Package, affected agent, CVSS severity — and read the full description, not just the CVE number." },
+      { "title": "2. Assess real exploitability", "text": "CVSS measures the worst case, not this environment. Check whether the vulnerable component is actually in use: is the kernel module loaded (lsmod)? Is the package manually installed (apt-mark showmanual)? What actually depends on it (apt-cache rdepends)?" },
+      { "title": "3. Check patch availability", "text": "apt list --upgradable plus the vendor's real tracker (Ubuntu Security Tracker), not just the scanner's summary." },
+      { "title": "4. Decide", "text": "Fix (patch available, apply it), Mitigate (no patch yet, reduce attack surface — e.g. blacklist an unused kernel module), or Accept risk (already neutralized by an existing control, or no reasonable mitigation exists)." },
+      { "title": "5. Document & set a re-check trigger", "text": "Every accepted-risk case gets a written rationale and a concrete condition for re-evaluation — proof, for an auditor or the next analyst, that it was reviewed and not just ignored." }
+    ]
+  },
+  "table": {
+    "title": "All 24 cases",
+    "headers": ["CVE", "Package", "Severity", "Status", "Summary"]
+  },
+  "cves": [
+    { "id": "CVE-2026-53355", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Use-after-free in RDS-over-InfiniBand teardown. The rds module wasn't loaded, so it was blacklisted while waiting for a vendor patch." },
+    { "id": "CVE-2026-53246", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Out-of-bounds read in SCTP cookie handling. No SCTP listener in use; sctp module blacklisted as mitigation." },
+    { "id": "CVE-2026-53225", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Uninitialized-memory read in SCTP ASCONF parsing — already covered by the sctp module blacklist above." },
+    { "id": "CVE-2026-53224", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Incomplete validation of SCTP INIT cookie length — already covered by the same sctp blacklist." },
+    { "id": "CVE-2026-53228", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Use-after-free in the SIT (IPv6-over-IPv4) tunnel driver during GSO. The sit module wasn't loaded; blacklisted." },
+    { "id": "CVE-2026-53151", "package": "linux-image (kernel)", "severity": "critical", "status": "mitigated", "summary": "Buffer-handling bug in the AF_RXRPC ACK parser. rxrpc module not loaded; blacklisted." },
+    { "id": "CVE-2022-0400", "package": "linux-image (kernel)", "severity": "high", "status": "mitigated", "summary": "Out-of-bounds read in the kernel's SMC (RDMA-oriented) protocol stack causing DoS. smc module not loaded; blacklisted." },
+    { "id": "CVE-2026-53362", "package": "linux-image (kernel)", "severity": "high", "status": "accepted", "summary": "Memory corruption in IPv6 fragment accounting. IPv6 confirmed in active use and the flaw requires an already-running local unprivileged process — accepted, disabling IPv6 would break real connectivity." },
+    { "id": "CVE-2023-0160", "package": "linux-image (kernel)", "severity": "medium", "status": "accepted", "summary": "Deadlock in the kernel BPF subsystem. Already neutralized: kernel.unprivileged_bpf_disabled was already set to 2. No action needed." },
+    { "id": "CVE-2026-31536", "package": "linux-image (orphaned kernel)", "severity": "critical", "status": "fixed", "summary": "Not the running kernel — an old, never-booted kernel version (134, while 136 was active) was found still installed and generating this CVE. Purged, 302 MB freed." },
+    { "id": "CVE-2026-24679", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Out-of-bounds read in FreeRDP's USB-redirection client. Fixed via Ubuntu Pro ESM Apps." },
+    { "id": "CVE-2024-32659", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "OOB read on zero frame width/height. Confirmed as a real dependency of patator (a pentest tool) before deciding to patch rather than remove." },
+    { "id": "CVE-2024-32041", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "OOB read in the /gfx graphics channel — fixed in the same ESM Apps batch." },
+    { "id": "CVE-2024-32459", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "OOB read affecting both client and server code, no workaround available — patch applied." },
+    { "id": "CVE-2024-32039", "package": "freerdp2-x11", "severity": "critical", "status": "fixed", "summary": "Integer overflow leading to an out-of-bounds write in the /gfx channel — more severe than a read, real RCE potential." },
+    { "id": "CVE-2024-35366", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "Integer overflow in FFmpeg's SBaGen demuxer accepting unvalidated negative durations." },
+    { "id": "CVE-2024-35367", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "OOB read in a PowerPC-only VP8 decoder path — not reachable on this amd64 machine, patched anyway as part of the same batch." },
+    { "id": "CVE-2024-35368", "package": "ffmpeg", "severity": "critical", "status": "fixed", "summary": "Double-free in the Rockchip MPP hardware decoder wrapper — ARM-only, not applicable here, patched with the rest of the batch." },
+    { "id": "CVE-2023-6602", "package": "libavcodec60", "severity": "medium", "status": "accepted", "summary": "Data-exfiltration flaw via crafted HLS playlists in FFmpeg's TTY demuxer. Vendor fix deferred indefinitely; shared library can't be selectively disabled — accepted given low severity." },
+    { "id": "CVE-2025-25467", "package": "libx264-164", "severity": "critical", "status": "accepted", "summary": "Insufficient memory tracking enabling RCE via a malicious AAC file. Upstream fix stalled with no follow-up; no safe mitigation for a shared codec library." },
+    { "id": "CVE-2025-68121", "package": "golang-1.22-src", "severity": "critical", "status": "accepted", "summary": "TLS session-resumption bypass in Go's crypto/tls under a specific coding pattern. Affects the dev toolchain, not a running service — no evidence the pattern is in use." },
+    { "id": "CVE-2025-49844", "package": "liblua5.1-0 (flagged) / Valkey", "severity": "critical", "status": "accepted", "summary": "Use-after-free via a crafted Lua GC script in Redis/Valkey scripting. Wazuh flagged the generic Lua library, but the actual exploitable component (valkey-server) was already running a patched version — closed, no action." },
+    { "id": "CVE-2025-57052", "package": "libcjson1", "severity": "critical", "status": "fixed", "summary": "Out-of-bounds access in cJSON's JSON-pointer array-index decoding. Fixed via Ubuntu Pro ESM Apps." },
+    { "id": "CVE-2026-31789", "package": "ovmf (edk2 / OpenSSL)", "severity": "critical", "status": "accepted", "summary": "Heap overflow converting an oversized X.509 field to hex — but only on 32-bit builds with a >1GB malicious certificate. This lab's VM firmware is 64-bit; the vendor itself rates it Low. Accepted." }
+  ]
+}

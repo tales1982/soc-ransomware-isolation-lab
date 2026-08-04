@@ -1,0 +1,100 @@
+{
+  "title": "Installation & Architecture",
+  "subtitle": "How a repurposed laptop became a SIEM, and the order everything got built in.",
+  "hardware": {
+    "title": "The hardware constraint that shaped everything",
+    "intro": "The SIEM server (\"soc-server\") is a Toshiba Satellite C670D-12Q laptop — nothing close to what a production SIEM would run on. That constraint is deliberate: it forces every performance and reliability finding on this site to be real, not theoretical.",
+    "specs": [
+      { "label": "CPU", "value": "2 cores, x86-64 — the single biggest bottleneck in the whole lab" },
+      { "label": "RAM", "value": "~8 GB" },
+      { "label": "Storage", "value": "~1 TB mechanical HDD (HGST), not SSD" },
+      { "label": "Network", "value": "Realtek Ethernet, Legacy BIOS (no UEFI)" },
+      { "label": "Boot method", "value": "PXE/netboot install — the hardware can't boot from USB or DVD at all" }
+    ],
+    "partitioning": {
+      "title": "Disk layout (LVM)",
+      "items": [
+        "/boot — 2 GB",
+        "/ — 100 GB",
+        "/var — 700 GB, dedicated to SIEM index and log storage",
+        "/home — 100 GB"
+      ]
+    }
+  },
+  "network": {
+    "title": "Network",
+    "items": [
+      "Home LAN, 192.168.178.0/24, behind a FRITZ!Box 7530 AX router",
+      "soc-server holds a permanent DHCP reservation",
+      "UFW firewall on every Linux/server host: default deny incoming, LAN-only SSH, Wazuh ports (443/1514/1515/55000) restricted to the local subnet"
+    ]
+  },
+  "architecture": {
+    "title": "The 9 machines",
+    "intro": "A mix of physical hardware and VirtualBox VMs, deliberately spanning three operating systems and including both an \"attacker\" box and an out-of-original-scope macOS addition — to demonstrate awareness of coverage gaps rather than hide them.",
+    "table": {
+      "headers": ["Machine", "OS", "Role"],
+      "rows": [
+        ["soc-server", "Ubuntu Server 24.04.4 LTS (physical)", "Wazuh manager + indexer + dashboard, Suricata, Python automation, Ansible control node"],
+        ["victim-linux", "Ubuntu 26.04", "Simulated media storage node: Samba shares (ingest/live/archive/backup/quarantine), FIM + auditd, Active Response target"],
+        ["tales-desktop", "Ubuntu 24.04.4 (physical)", "Endpoint, auditd, Suricata sensor — primary target of the CVE triage campaign"],
+        ["kali-vm", "Kali Linux (VM)", "Endpoint / attacker-role box, auditd, Suricata sensor"],
+        ["kali-msi-laptop", "Kali GNU/Linux (physical)", "Endpoint / attacker-role box, auditd, Suricata sensor"],
+        ["win10-vm", "Windows 10 Pro (VM)", "Endpoint, Sysmon, Suricata sensor"],
+        ["win-server-vm", "Windows Server 2019 (VM)", "Endpoint, Sysmon, Suricata sensor, Active Directory"],
+        ["mac-laptop", "macOS (physical)", "Endpoint (scheduled FIM only), Suricata via Homebrew"],
+        ["thehive-vm", "Ubuntu Server 24.04.4 LTS (VM, 8GB/4vCPU/80GB)", "TheHive 5.2 + Cortex 3.1.8 + Cassandra + Elasticsearch via Docker Compose"]
+      ]
+    }
+  },
+  "order": {
+    "title": "Onboarding a new machine: the actual checklist used",
+    "intro": "Every machine in the lab follows the same sequence, documented once and reused instead of re-derived each time.",
+    "steps": [
+      {
+        "title": "1. Connect it to Wazuh",
+        "text": "Configure networking (Bridged mode for VMs, not NAT — otherwise the machine never lands on the real LAN subnet), test connectivity to the manager on ports 1514/1515, check for a leftover agent registration from a prior image (this alone caused rework on almost every reused VM), then run the dashboard-generated install command. Only move on once the agent shows Active."
+      },
+      {
+        "title": "2A. Windows → Sysmon",
+        "text": "Check for a pre-existing install, download only from the official Microsoft Sysinternals source, install with a curated MITRE-mapped config (SwiftOnSecurity/olafhartong), wire the Sysmon + PowerShell-Operational channels into ossec.conf, validate on the dashboard."
+      },
+      {
+        "title": "2B. Linux → auditd",
+        "text": "Install, create identity/privilege/SSH watch rules, test with ausearch, enable realtime FIM. One real gotcha: the first touch on a monitored file before realtime FIM is enabled only becomes the baseline — it does not trigger an alert. The file has to be touched again after the agent restart to see the real detection."
+      },
+      {
+        "title": "2C. macOS",
+        "text": "No dedicated tooling exists here — an intentionally documented gap. macOS has neither auditd nor Sysmon, so only the native Wazuh-agent FIM is available, and it silently falls back to scheduled scanning for some folders with unexplained multi-hour detection delays."
+      },
+      {
+        "title": "3. Log it",
+        "text": "One line in the build log is normally enough (name, type, OS, date). A full write-up is only justified when a genuinely new error is found — not already covered by an existing guide."
+      },
+      {
+        "title": "4. (Conditional) Remove a stale agent",
+        "text": "Used when reinstalling on the same machine (the old manager-side registration must be removed first, or the new install fails with \"Agent key already in use\") or when permanently retiring a machine."
+      }
+    ]
+  },
+  "phases": {
+    "title": "The 17-phase build plan",
+    "intro": "16 of 17 planned phases were completed (Phase 16 — physical backup media — was explicitly skipped for lack of external hardware, and documented as such rather than silently dropped). The plan itself started as a requirement-by-requirement traceability exercise — every capability named in the target role (log correlation, EDR-equivalent monitoring, a SOAR-style response layer, Python automation, network-equipment APIs) was mapped to a specific phase before any installation began, and phases 10–14 exist specifically to cover requirements that had no equivalent yet. What follows is the condensed timeline; the full narrative — including every bug — lives on the Technologies pages.",
+    "items": [
+      { "phase": "3", "title": "Wazuh manager install", "note": "Two real bugs: a systemd startup timeout on the 2-core box, and a known upstream API-credentials bug" },
+      { "phase": "4", "title": "First Windows endpoint", "note": "Windows Installer silently kept a stale agent version — 4.12.0 instead of the just-installed 4.14.7" },
+      { "phase": "5", "title": "Second Linux endpoint (Kali)", "note": "NetworkManager bridge-profile bug — carrier up, no IP, didn't survive reboot" },
+      { "phase": "6", "title": "Media storage server", "note": "Samba shares, FIM, the first ransomware-behavior rename test" },
+      { "phase": "7", "title": "Suricata IDS — single sensor", "note": "Later found to have a real architectural blind spot (see Wazuh → Network Security)" },
+      { "phase": "8", "title": "Python automation engine", "note": "Incident reporting, isolation, failover, forensic alerting, latency measurement" },
+      { "phase": "9", "title": "Ansible orchestration", "note": "SSH-key passphrase race condition across parallel hosts" },
+      { "phase": "10", "title": "Virtual network topology (containerlab)", "note": "NETCONF pivoted to docker exec + iptables when the router image exposed neither SSH nor NETCONF" },
+      { "phase": "11", "title": "Active Response wiring", "note": "Multi-day deadlock hunt — a stdin.read() call blocking forever on Wazuh's permanently-open response pipe" },
+      { "phase": "12", "title": "Failover simulation", "note": "Clean-worker replacement so \"playout\" never fully drops" },
+      { "phase": "13", "title": "Forensic alerting", "note": "A lost `if __name__ == \"__main__\":` block during a nano edit produced a silent no-op script" },
+      { "phase": "14", "title": "Latency measurement", "note": "First attempt (18.05s) was invalid — it measured human reaction time, not the pipeline" },
+      { "phase": "15", "title": "Ransomware-at-scale simulation", "note": "The incident-ID collision bug — the most significant finding of the whole project" },
+      { "phase": "17", "title": "Portfolio assembly", "note": "Followed by an extended bonus phase: CVE management, 8-sensor Suricata rollout, TheHive + Cortex" }
+    ]
+  }
+}

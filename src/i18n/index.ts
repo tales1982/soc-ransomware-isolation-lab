@@ -1,0 +1,74 @@
+import i18n from 'i18next'
+import { initReactI18next } from 'react-i18next'
+import LanguageDetector from 'i18next-browser-languagedetector'
+
+import enCommon from './locales/en/common.json'
+import enHome from './locales/en/home.json'
+import enInstall from './locales/en/install.json'
+import enTech from './locales/en/tech.json'
+import enWazuh from './locales/en/wazuh.json'
+import enThehive from './locales/en/thehive.json'
+import enCortex from './locales/en/cortex.json'
+import enAutomation from './locales/en/automation.json'
+import enCve from './locales/en/cve.json'
+import enExercises from './locales/en/exercises.json'
+import enAbout from './locales/en/about.json'
+
+import frCommon from './locales/fr/common.json'
+import frHome from './locales/fr/home.json'
+import frInstall from './locales/fr/install.json'
+import frTech from './locales/fr/tech.json'
+import frWazuh from './locales/fr/wazuh.json'
+import frThehive from './locales/fr/thehive.json'
+import frCortex from './locales/fr/cortex.json'
+import frAutomation from './locales/fr/automation.json'
+import frCve from './locales/fr/cve.json'
+import frExercises from './locales/fr/exercises.json'
+import frAbout from './locales/fr/about.json'
+
+export const defaultNS = 'common'
+
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    ns: ['common', 'home', 'install', 'tech', 'wazuh', 'thehive', 'cortex', 'automation', 'cve', 'exercises', 'about'],
+    defaultNS,
+    resources: {
+      en: {
+        common: enCommon,
+        home: enHome,
+        install: enInstall,
+        tech: enTech,
+        wazuh: enWazuh,
+        thehive: enThehive,
+        cortex: enCortex,
+        automation: enAutomation,
+        cve: enCve,
+        exercises: enExercises,
+        about: enAbout,
+      },
+      fr: {
+        common: frCommon,
+        home: frHome,
+        install: frInstall,
+        tech: frTech,
+        wazuh: frWazuh,
+        thehive: frThehive,
+        cortex: frCortex,
+        automation: frAutomation,
+        cve: frCve,
+        exercises: frExercises,
+        about: frAbout,
+      },
+    },
+    fallbackLng: 'en',
+    interpolation: { escapeValue: false },
+    detection: {
+      order: ['localStorage', 'navigator'],
+      lookupLocalStorage: 'soc-lab-lang',
+      caches: ['localStorage'],
+    },
+  })
+
+export default i18n
