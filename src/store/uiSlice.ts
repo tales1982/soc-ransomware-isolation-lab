@@ -1,7 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
 
 export type Theme = 'light' | 'dark'
-export type Lang = 'en' | 'fr'
+export type Lang = 'en' | 'fr' | 'pt'
 
 function getInitialTheme(): Theme {
   const stored = localStorage.getItem('soc-lab-theme')
@@ -11,9 +11,11 @@ function getInitialTheme(): Theme {
 
 function getInitialLang(): Lang {
   const stored = localStorage.getItem('soc-lab-lang')
-  if (stored === 'en' || stored === 'fr') return stored
+  if (stored === 'en' || stored === 'fr' || stored === 'pt') return stored
   const nav = navigator.language?.slice(0, 2)
-  return nav === 'fr' ? 'fr' : 'en'
+  if (nav === 'fr') return 'fr'
+  if (nav === 'pt') return 'pt'
+  return 'en'
 }
 
 interface UiState {

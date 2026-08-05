@@ -1,0 +1,64 @@
+{
+  "hero": {
+    "eyebrow": "Um SOC caseiro de verdade, construído e colocado à prova de propósito",
+    "title": "Eu construí um Centro de Operações de Segurança a partir de um notebook velho.",
+    "titleHighlight": "Depois tentei quebrar ele.",
+    "subtitle": "Wazuh, Suricata, TheHive e Cortex, conectados em 9 máquinas reais — Windows, Linux e macOS — pra detectar e conter automaticamente um ataque estilo ransomware numa rede de armazenamento de mídia simulada. Todo bug apresentado aqui é um bug real que eu encontrei e corrigi.",
+    "ctaPrimary": "Ver a instalação",
+    "ctaSecondary": "Conhecer as tecnologias"
+  },
+  "stats": [
+    { "value": "9", "label": "Máquinas reais monitoradas" },
+    { "value": "8", "label": "Sensores Suricata independentes" },
+    { "value": "24", "label": "CVEs tratadas de ponta a ponta" },
+    { "value": "44", "label": "Exercícios e ataques práticos" },
+    { "value": "707", "label": "Padrões MITRE ATT&CK carregados" },
+    { "value": "3.00s", "label": "Latência média detecção → relatório forense" }
+  ],
+  "pillars": {
+    "title": "O que este laboratório realmente prova",
+    "items": [
+      {
+        "title": "Detecção",
+        "text": "SIEM Wazuh com monitoramento de integridade de arquivos, Sysmon, auditd e 8 sensores de rede Suricata implantados de forma independente — não um único ponto de espelhamento."
+      },
+      {
+        "title": "Resposta automatizada",
+        "text": "Uma regra de correlação customizada dispara uma cadeia de resposta ativa em Python: isolamento de rede, failover de workload e um relatório forense — tudo compartilhando um único ID de incidente, medido com latência média de 3.00s de ponta a ponta."
+      },
+      {
+        "title": "Gestão de casos",
+        "text": "O TheHive recebe automaticamente todo alerta de nível 7+, o Cortex enriquece observáveis contra VirusTotal e AbuseIPDB, e quatro templates de caso padronizam o fluxo de investigação."
+      },
+      {
+        "title": "Gestão de vulnerabilidades",
+        "text": "24 CVEs reais tratadas uma por uma — não só escaneadas — com uma decisão explícita de corrigir/mitigar/aceitar risco, e a justificativa documentada pra cada uma."
+      }
+    ]
+  },
+  "story": {
+    "title": "Por que isso existe",
+    "paragraphs": [
+      "Este laboratório foi construído como preparação direta pra uma vaga de estágio focada em isolamento automatizado (air-gap) e anti-ransomware para redes de armazenamento de mídia. Em vez de estudar o assunto de fora, o objetivo foi construir o sistema de verdade: um nó de armazenamento de mídia simulado, um SIEM real vigiando ele, e uma cadeia de contenção automatizada disparada por uma regra de detecção real.",
+      "Toda afirmação técnica deste site é sustentada por algo que realmente rodou em hardware real: um notebook de 2 núcleos reaproveitado como servidor SIEM, uma mistura de máquinas físicas e VMs entre Windows, Linux e macOS, e uma rede genuinamente limitada que forçou trade-offs de engenharia reais, não os de livro-texto."
+    ]
+  },
+  "warstories": {
+    "title": "Alguns bugs que vale a pena ler",
+    "subtitle": "Cada um deles foi encontrado testando, não em revisão de design.",
+    "items": [
+      {
+        "title": "300 alertas, só 100 relatórios forenses",
+        "text": "Simular um evento de ransomware em massa (100 arquivos renomeados de uma vez) revelou que meus IDs de incidente — gerados com resolução de timestamp de 1 segundo — colidiam sob carga, sobrescrevendo silenciosamente evidências forenses. Exatamente no momento em que mais importaria num ataque real."
+      },
+      {
+        "title": "Um scan que deveria ser invisível... e foi",
+        "text": "Um scan nmap real contra uma das minhas próprias máquinas não gerou nenhum alerta em lugar nenhum. Acabou sendo dois problemas separados, um em cima do outro: um alarme falso de roteamento por loopback, e uma lacuna arquitetural genuína em implantações de sensor único do Suricata."
+      },
+      {
+        "title": "Um script que rodou e não fez nada",
+        "text": "Um script de Resposta Ativa registrava 'comando disparado' mas nunca isolava nada. O bug: um grande colar de texto no nano tinha silenciosamente apagado o bloco final `if __name__ == \"__main__\":`. Código de saída 0, zero linhas de log — a assinatura exata de um script que só define funções e nunca chama nenhuma delas."
+      }
+    ]
+  }
+}

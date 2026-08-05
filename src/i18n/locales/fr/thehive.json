@@ -61,6 +61,29 @@
         ]},
         { "type": "callout", "variant": "info", "title": "Validation", "text": "Une alerte de test manuelle a renvoyé un HTTP 201 — et en quelques minutes, de vraies alertes Wazuh (un événement « Listened ports status changed » et une anomalie rootcheck) sont apparues dans la file de TheHive sans aucune action manuelle supplémentaire, confirmant que le démon integratord appelait correctement le script en production, pas seulement lors du test manuel." }
       ]
+    },
+    {
+      "id": "reading-real-alert",
+      "title": "Lire une vraie alerte de bout en bout — exemple concret",
+      "blocks": [
+        { "type": "p", "text": "Une vraie alerte arrivée automatiquement via l'intégration ci-dessus, exactement telle qu'elle apparaît dans l'onglet General de TheHive — pas un exemple construit. C'est le même flux de triage en 5 questions utilisé sur la page Wazuh, appliqué à un cas réel." },
+        { "type": "code", "lang": "json", "code": "{\n  \"timestamp\": \"2026-08-05T07:13:50.366+0200\",\n  \"rule\": {\n    \"level\": 7,\n    \"description\": \"Integrity checksum changed.\",\n    \"id\": \"550\",\n    \"mitre\": { \"id\": [\"T1565.001\"], \"tactic\": [\"Impact\"], \"technique\": [\"Stored Data Manipulation\"] },\n    \"firedtimes\": 24,\n    \"groups\": [\"ossec\", \"syscheck\", \"syscheck_entry_modified\", \"syscheck_file\"]\n  },\n  \"agent\": { \"id\": \"005\", \"name\": \"tales-desktop\", \"ip\": \"192.168.178.92\" },\n  \"manager\": { \"name\": \"soc-server\" },\n  \"full_log\": \"File '/etc/cups/subscriptions.conf.O' modified\\nMode: realtime\\nChanged attributes: size,inode,mtime,md5,sha1,sha256\\nSize changed from '397' to '699'\\nOld md5sum was: '6ae849634dec4fa5803ae7d8d23fa4da'\\nNew md5sum is : 'c78975ea11f60fee3c7252e019985309'\",\n  \"syscheck\": {\n    \"path\": \"/etc/cups/subscriptions.conf.O\",\n    \"mode\": \"realtime\",\n    \"uid_after\": \"0\",\n    \"gid_after\": \"7\",\n    \"uname_after\": \"root\",\n    \"gname_after\": \"lp\",\n    \"changed_attributes\": [\"size\", \"inode\", \"mtime\", \"md5\", \"sha1\", \"sha256\"],\n    \"event\": \"modified\"\n  },\n  \"decoder\": { \"name\": \"syscheck_integrity_changed\" },\n  \"location\": \"syscheck\"\n}" },
+        { "type": "h3", "text": "1 — Reconnaître" },
+        { "type": "p", "text": "rule.id 550, niveau 7 — une alerte FIM générique Wazuh « contenu modifié », pas la règle critique propre au laboratoire 100200 (niveau 12, limitée à /srv/media). Le rule.mitre.id T1565.001 (« Stored Data Manipulation ») est le mappage générique par défaut de Wazuh pour tout changement de contenu de fichier — il catégorise la technique, il ne signifie pas en soi que quelque chose de malveillant s'est produit." },
+        { "type": "h3", "text": "2 — Contextualiser" },
+        { "type": "p", "text": "syscheck.path est /etc/cups/subscriptions.conf.O — CUPS, le sous-système d'impression Linux, réécrivant son propre fichier d'état d'abonnements. Propriété après le changement : uname_after root, gname_after lp (groupe « line printer ») — parfaitement cohérent avec le service d'impression modifiant sa propre configuration. Point crucial : ce chemin n'est pas sous /srv/media (l'actif protégé) et n'est pas un fichier sensible pour la sécurité comme /etc/passwd ou /etc/sudoers." },
+        { "type": "h3", "text": "3 — Corréler" },
+        { "type": "p", "text": "rule.firedtimes : 24 — cette règle exacte s'est déjà déclenchée 24 fois pour ce type d'événement sur cet agent. Un firedtimes élevé sur une règle de faible sévérité est lui-même un signal de corrélation : il indique un motif de fond récurrent et établi plutôt qu'un événement isolé et nouveau méritant une escalade." },
+        { "type": "h3", "text": "4 — Décider" },
+        { "type": "p", "text": "Tout pointe dans la même direction — chemin du fichier, propriété, récurrence — donc le jugement raisonnable est : comportement système attendu, pas un événement de sécurité. Le fermer, ne pas le promouvoir en cas." },
+        { "type": "h3", "text": "5 — Documenter et résoudre" },
+        { "type": "p", "text": "Deux actions concrètes dans TheHive, selon ce que l'alerte s'avère être :" },
+        { "type": "ul", "items": [
+          "Si elle est confirmée bénigne (ce cas) : fermer l'alerte directement depuis la liste des alertes — aucun cas nécessaire. Comme ce motif exact a déjà firedtimes: 24, c'est un candidat solide pour une règle d'atténuation côté Wazuh, le même schéma déjà utilisé pour la règle 100101 (qui déclasse le bruit « Ethertype unknown » de Suricata) : ajouter une règle dans local_rules.xml qui abaisse la sévérité des changements syscheck spécifiquement sous /etc/cups/, pour que cela n'atteigne plus du tout la file de TheHive, tandis que les chemins qui comptent vraiment restent inchangés.",
+          "Si au contraire le contexte pointait dans l'autre sens — un chemin inconnu, une propriété inattendue, aucun historique de firedtimes préalable — la même alerte serait promue directement en cas via le modèle Ransomware / FIM Critical Alert de la section ci-dessus, et traitée selon sa liste de 8 tâches."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Les autres onglets d'une alerte", "text": "Observables, TTPs, Similar Cases et Similar Alerts existent exactement pour ce genre de décision : Similar Alerts montrerait d'un coup d'œil chaque occurrence précédente de firedtimes:24, sans avoir besoin de retourner sur l'écran Discover de Wazuh pour reconstituer l'historique manuellement." }
+      ]
     }
   ]
 }

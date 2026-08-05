@@ -1,0 +1,42 @@
+{
+  "title": "Sobre",
+  "me": {
+    "title": "Sobre mim",
+    "name": "Tales Lima de Paula",
+    "tagline": "Blue Team / SOC — construiu este laboratório a partir de um notebook reaproveitado e uma rede doméstica.",
+    "bioPlaceholder": "[Adicione uma bio curta aqui — background, o que te atrai pra segurança defensiva, e o que você está buscando a seguir.]",
+    "contactNote": "[Adicione seus links de contato aqui — email, LinkedIn, GitHub.]",
+    "editHint": "Este bloco é intencionalmente um template — edite diretamente src/i18n/locales/{en,fr,pt}/about.json pra adicionar sua própria bio e detalhes de contato."
+  },
+  "project": {
+    "title": "Sobre este projeto",
+    "paragraphs": [
+      "Este laboratório foi construído como preparação direta e prática para uma vaga de estágio focada em air-gap automatizado e isolamento de ransomware para redes de armazenamento de mídia — o tipo de infraestrutura que roda por trás do pipeline de ingest, transcodificação e playout de uma emissora. Em vez de estudar o assunto de fora, o objetivo foi construir o sistema de verdade: um nó simulado de armazenamento de mídia, um SIEM real observando ele, e uma cadeia de contenção automatizada disparada por uma regra de detecção real.",
+      "Toda afirmação técnica neste site é respaldada por algo que realmente rodou em hardware real: um notebook reaproveitado de 2 núcleos como servidor SIEM, uma mistura de máquinas físicas e VMs entre Windows, Linux e macOS, e uma rede genuinamente subdimensionada que forçou trade-offs de engenharia reais em vez de exemplos limpos de livro-texto.",
+      "O escopo cresceu além do plano original de 17 fases assim que a cadeia principal de detecção-e-resposta ficou funcionando: uma campanha completa de gestão de vulnerabilidades CVE (24 CVEs reais, cada uma com uma decisão documentada de corrigir/mitigar/aceitar), um rollout de rede Suricata com 8 sensores depois de descobrir um ponto cego real de visibilidade, e uma camada completa de gestão de casos TheHive + Cortex conectada diretamente ao Wazuh.",
+      "Nada aqui usa malware real. Todo teste de comportamento de ransomware é um renomeamento seguro de arquivo ou um teste de criptografia OpenSSL delimitado em dados descartáveis, sempre com um backup tirado antes e um passo de restauração documentado. A própria automação foi construída com uma flag de segurança REPORT_ONLY e nunca foi ativada em modo de ação real até ser validada em vários eventos com zero falsos positivos."
+    ]
+  },
+  "approach": {
+    "title": "Como isso foi aprendido, não só construído",
+    "intro": "Toda área desconhecida — APIs de rede, frameworks de IR, internals do Ansible — foi estudada num ritmo semanal fixo antes de ser construída, não improvisada durante a construção.",
+    "roadmap": [
+      { "week": "Semana 1", "focus": "Fundamentos de Linux — permissões, systemd, LVM, Netplan" },
+      { "week": "Semana 2", "focus": "Redes I — TCP/IP, VLANs, conceitos de SDN" },
+      { "week": "Semana 3", "focus": "Conceitos de SIEM/SOAR e o framework MITRE ATT&CK" },
+      { "week": "Semana 4", "focus": "Python para automação — hashlib, json, pathlib, subprocess, requests" },
+      { "week": "Semana 5", "focus": "APIs de rede — NETCONF vs SNMP vs CLI/REST, NAPALM/Netmiko/ncclient" },
+      { "week": "Semana 6", "focus": "Ansible — playbooks, idempotência, e os internals da Active Response" },
+      { "week": "Semana 7", "focus": "Resposta a incidentes — o ciclo NIST SP 800-61, estrutura de relatório forense" },
+      { "week": "Semana 8", "focus": "Metodologia de avaliação e preparação para entrevistas" }
+    ],
+    "rhythm": "Aproximadamente uma hora de teoria mais duas horas de prática por dia útil, com o hábito fixo de gravar um vídeo demo curto toda sexta-feira.",
+    "pitchTitle": "Como explicar este projeto em 3 minutos",
+    "pitch": [
+      { "part": "Problema (30s)", "text": "Um pipeline de mídia precisa de detecção e contenção automatizada de ransomware sem interromper o sinal de transmissão ao vivo." },
+      { "part": "Abordagem (60s)", "text": "Um SIEM real (Wazuh) observa um nó simulado de armazenamento de mídia; uma regra customizada dispara uma cadeia de automação em Python: isolar, fazer failover, relatório forense — todos compartilhando um único incident ID." },
+      { "part": "Resultado (60s)", "text": "3,00s de latência média entre detecção e relatório em 10 execuções reais, 0 falsos positivos — mais um bug real de perda de dados encontrado e corrigido sob um teste de carga com rajada de 100 arquivos." },
+      { "part": "Limitações e próximos passos (30s)", "text": "Testado em hardware de 2 núcleos com tetos reais de throughput; o modo REPORT_ONLY nunca foi ativado em ação real; o próximo passo seria estender a validação para carga sustentada de várias horas." }
+    ]
+  }
+}

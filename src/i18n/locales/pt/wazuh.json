@@ -1,0 +1,246 @@
+{
+  "title": "Wazuh",
+  "subtitle": "SIEM/XDR — centralizando cada log, correlacionando cada evento, e disparando a cadeia de resposta automatizada.",
+  "intro": [
+    { "type": "p", "text": "O Wazuh é o centro deste laboratório: todo endpoint envia logs pra ele, o motor de Monitoramento de Integridade de Arquivos dele vigia o caminho de armazenamento de mídia simulado, o motor de regras dele decide o que vira alerta, e o mecanismo de Resposta Ativa dele é o que realmente dispara a automação de isolamento/failover/forense." },
+    { "type": "p", "text": "Esta página não é um tutorial de instalação — é o que eu realmente aprendi rodando o Wazuh todo dia como analista, incluindo os bugs reais que encontrei configurando ele num hardware genuinamente limitado." },
+    { "type": "callout", "variant": "tip", "title": "Por que Wazuh em vez de Splunk?", "text": "Gratuito e totalmente open-source, com Resposta Ativa nativa embutida — nenhum produto SOAR separado é necessário pra ir da detecção à ação automatizada. Os conceitos centrais de SIEM (regras, correlação, níveis de severidade, dashboards) se transferem diretamente pro Splunk ou qualquer outro SIEM comercial depois; nada aqui é conhecimento específico do Wazuh. E como é gratuito, o Splunk Free (ou um trial) poderia ser adicionado por cima depois pra comparação, sem refazer nada desse trabalho." }
+  ],
+  "sections": [
+    {
+      "id": "dashboard-nav",
+      "title": "Navegando no dashboard",
+      "blocks": [
+        { "type": "p", "text": "O Wazuh Dashboard roda em cima do OpenSearch Dashboards (a mesma base do Kibana). O menu principal tem algumas telas que cobrem quase tudo que um fluxo de trabalho diário de analista precisa:" },
+        { "type": "ul", "items": [
+          "Threat Hunting — a tela mais usada: alertas em tempo real, filtráveis por agente, regra, nível, grupo. O equivalente do Discover no SIEM.",
+          "Endpoints Summary — todo agente registrado: status, última vez visto, SO, versão do agente. Primeiro lugar pra checar se um servidor quieto está fora do ar ou comprometido.",
+          "File Integrity Monitoring — eventos de FIM isolados (modificado/adicionado/removido), filtráveis por caminho/agente.",
+          "Vulnerability Detection — CVEs conhecidas por agente, com severidade — isso é o que alimenta a página de Gestão de CVEs.",
+          "Server Management → Rules / Decoders / Groups — inspecionar toda regra carregada, incluindo as customizadas construídas pra este laboratório.",
+          "Reporting — geração de relatório PDF agendada ou sob demanda."
+        ]},
+        { "type": "h3", "text": "Sintaxe de busca (DQL)" },
+        { "type": "code", "code": "rule.level >= 12\nagent.name : \"victim-linux\"\nrule.groups : \"media_isolation\"\nrule.id : \"100200\" and agent.name : \"victim-linux\"" },
+        { "type": "callout", "variant": "tip", "title": "A causa nº 1 de \"nenhum alerta aparece\"", "text": "Quase nunca é uma regra quebrada — é o seletor de intervalo de tempo estando muito estreito. Deixe em \"Last 24 hours\" por padrão enquanto investiga, e só reduza depois de já ter encontrado o evento." }
+      ]
+    },
+    {
+      "id": "reading-alerts",
+      "title": "Lendo um alerta como um analista",
+      "blocks": [
+        { "type": "p", "text": "Um alerta real produzido pela regra de detecção de ransomware do laboratório, disparado contra o nó de armazenamento de mídia simulado:" },
+        { "type": "code", "lang": "json", "code": "{\n  \"rule\": {\n    \"level\": 12,\n    \"id\": \"100200\",\n    \"description\": \"Media storage node: file integrity change detected in /srv/media (possible ransomware behavior)\",\n    \"groups\": [\"local\", \"media_isolation\"]\n  },\n  \"agent\": { \"id\": \"004\", \"name\": \"victim-linux\", \"ip\": \"192.168.178.177\" },\n  \"syscheck\": {\n    \"path\": \"/srv/media/ingest/teste_diagnostico.txt\",\n    \"event\": \"deleted\",\n    \"sha256_after\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"\n  }\n}" },
+        { "type": "h3", "text": "Escala de severidade, com exemplos reais deste laboratório" },
+        { "type": "table", "headers": ["Faixa", "Significado", "Exemplo real"], "rows": [
+          ["0–3", "Informativo, ruído esperado", "Regra 100101 — ruído de broadcast IoT da rede doméstica, deliberadamente rebaixado"],
+          ["4–7", "Tentativas isoladas, sem sucesso confirmado", "Um único login falho; um comando sudo incomum"],
+          ["8–12", "Padrão suspeito, possível ataque em andamento", "Regra 100200 (nível 12) — mudança de integridade na pasta de mídia protegida"],
+          ["13–16", "Confirmado/crítico — geralmente dispara Resposta Ativa", "Reservado pra correlações de alta confiança, múltiplos indicadores"]
+        ]},
+        { "type": "h3", "text": "MITRE ATT&CK já vem embutido nos decoders padrão" },
+        { "type": "code", "lang": "json", "code": "{\n  \"rule\": {\n    \"id\": \"5407\",\n    \"description\": \"Successful sudo executed.\",\n    \"mitre\": { \"id\": [\"T1548.003\"], \"tactic\": [\"Privilege Escalation\", \"Defense Evasion\"] }\n  }\n}" },
+        { "type": "h3", "text": "O fluxo de triagem em 5 perguntas" },
+        { "type": "ol", "items": [
+          "Reconhecer — o que a descrição da regra realmente diz, em linguagem simples?",
+          "Contextualizar — qual agente, que horário, isso é esperado aqui?",
+          "Correlacionar — existe um alerta próximo (mesmo agente, minutos de diferença) que muda a história?",
+          "Decidir — ignorar ruído conhecido, escalar, ou responder.",
+          "Documentar — mesmo uma decisão de \"ignorar\" fica registrada, pra que o próximo turno não reinvestigue a mesma coisa do zero."
+        ]},
+        { "type": "callout", "variant": "info", "text": "Foi exatamente esse fluxo que levou à descoberta do bug de colisão de ID de incidente descrito mais abaixo nesta página." }
+      ]
+    },
+    {
+      "id": "building-dashboards",
+      "title": "Construindo um dashboard customizado",
+      "blocks": [
+        { "type": "p", "text": "Existem dois dashboards neste laboratório, construídos da mesma forma: escolher um index pattern, construir visualizações individuais, depois montar tudo junto." },
+        { "type": "ol", "items": [
+          "Confirmar o index pattern primeiro (wazuh-alerts-* ou wazuh-states-vulnerabilities-*) — um index pattern faltando/errado é a causa mais comum de \"eu construí o painel e ele está vazio\".",
+          "Menu → Dashboards Management → Visualize → Create visualization.",
+          "Escolher um tipo: Metric (número grande), Data table, Line/Bar (série temporal), ou Pie.",
+          "Digitar o filtro direto na barra de busca própria da visualização antes de configurar a agregação, pra que fique salvo junto com a visualização.",
+          "Salvar com um nome descritivo — nomes genéricos tipo \"Visualization 1\" viram um problema rápido."
+        ]},
+        { "type": "h3", "text": "Exemplo real: o dashboard Media Storage Security" },
+        { "type": "table", "headers": ["Painel", "Tipo", "Agregação"], "rows": [
+          ["Total de alertas 100200 (24h)", "Metric", "Count, filtrado por rule.id:\"100200\""],
+          ["Alertas ao longo do tempo", "Line", "Histograma de data em @timestamp"],
+          ["Arquivos mais afetados", "Data table", "Terms em syscheck.path.keyword, top 10"],
+          ["Distribuição por tipo de evento", "Pie", "Terms em syscheck.event"]
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Exportar dashboards como código", "text": "Stack Management → Saved Objects → selecionar o dashboard + suas visualizações → Export gera um arquivo .ndjson. Versionar isso do mesmo jeito que os playbooks do Ansible significa que o dashboard inteiro é reimportável numa instalação nova." }
+      ]
+    },
+    {
+      "id": "alerting-anomaly",
+      "title": "Além dos dashboards: Alerting, Anomaly Detection, Notifications, Maps e Reporting",
+      "blocks": [
+        { "type": "callout", "variant": "info", "title": "Uma distinção que vale a pena ser precisa", "text": "As regras do Wazuh (como 100200 e 100101) decidem o que vira evento no índice — uma decisão por evento. O Alerting fica acima disso: ele vigia dados já indexados e só dispara quando um padrão agregado é atingido, ex: \"mais de 3 eventos de nível 12 em 5 minutos\". Eles não são concorrentes — uma regra decide o que conta como evento; o Alerting decide quando um padrão de eventos merece acordar alguém." },
+        { "type": "h3", "text": "Configurando um monitor de verdade" },
+        { "type": "ol", "items": [
+          "Alerting → Monitors → Create monitor → \"Per query monitor\" com o Visual editor.",
+          "Fonte de dados: wazuh-alerts-*. Query: rule.groups:\"media_isolation\" and rule.level >= 12, agregação Count.",
+          "Agendamento: a cada 5 minutos.",
+          "Criar um trigger: count() > 0, severidade nível 1 (a mais alta) — esse é um cenário de possível ransomware ativo.",
+          "Conectar o trigger a um canal de Notifications, usando as próprias variáveis de template da plataforma:"
+        ]},
+        { "type": "code", "code": "Monitor {{ctx.monitor.name}} fired {{ctx.results.0.hits.total.value}} critical-level\nevents in the media_isolation group in the last 5 minutes.\nAgent: victim-linux. Check Threat Hunting immediately." },
+        { "type": "h3", "text": "Anomaly Detection — quando ninguém definiu o limite certo ainda" },
+        { "type": "p", "text": "Tanto regras quanto monitores de Alerting exigem que alguém já tenha pensado na condição certa. O Anomaly Detection usa aprendizado de máquina (Random Cut Forest) pra aprender o padrão normal de uma métrica ao longo do tempo e sinalizar um desvio — sem um limite fixo configurado com antecedência." },
+        { "type": "ol", "items": [
+          "Criar um detector: fonte de dados wazuh-alerts-*, filtrada por agent.name.",
+          "Intervalo: 10 minutos. Feature: event_count, agregação Count sobre os documentos filtrados.",
+          "Iniciar o detector — ele precisa de um período de aprendizado (horas a alguns dias de histórico) antes de conseguir sinalizar anomalias com alguma confiança.",
+          "Dentro do detector → aba Alerts → Set up alerts, o que cria por baixo dos panos um monitor de Alerting do tipo \"Anomaly detector monitor\"."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Onde isso teria importado mais neste laboratório", "text": "Um detector no volume de eventos de FIM do victim-linux teria sinalizado a rajada de 100 arquivos da simulação de ransomware em escala como uma anomalia estatística clara — mesmo sem nenhuma regra específica pra \"muitos arquivos de uma vez\", que é exatamente o tipo de padrão de ataque que escapa de limites fixos." },
+        { "type": "h3", "text": "Notifications — configurado uma vez, reutilizado em todo lugar" },
+        { "type": "p", "text": "Um canal (webhook do Slack, email/SMTP, webhook genérico, ou SNS), configurado uma vez, é reutilizado pelos triggers do Alerting, alertas do Anomaly Detection, e entregas agendadas de Reporting. Sempre envie uma mensagem de teste antes de conectar a qualquer coisa importante." },
+        { "type": "callout", "variant": "danger", "text": "A URL de um canal (um webhook do Slack especialmente) funciona como uma senha — qualquer um que tiver ela pode postar no canal. Nunca commite ela num repositório público nem cole em documentação compartilhada." },
+        { "type": "h3", "text": "Maps — a única funcionalidade que este laboratório genuinamente não precisa" },
+        { "type": "p", "text": "Maps precisa de documentos com um campo geo_point, tipicamente vindo de enriquecimento GeoIP num IP de origem de um evento de tentativa de login. Rodando inteiramente numa LAN doméstica privada (192.168.178.0/24) significa que simplesmente não existem IPs públicos pra geolocalizar de forma útil aqui. Num deployment real monitorando um servidor SSH/RDP exposto na internet, enriquecimento GeoIP mais uma camada de documentos no mapa visualizaria origens de força bruta diretamente — útil pra uma decisão de geoblocking, só que não aplicável ao modelo de ameaça deste laboratório." },
+        { "type": "h3", "text": "Reporting" },
+        { "type": "p", "text": "Qualquer dashboard pode gerar um PDF sob demanda ou agendado: abra ele, defina o intervalo de tempo (o relatório captura exatamente o que está na tela), depois Share → Generate PDF, ou agende uma recorrência (ex: toda segunda 8h) e junte com um canal de Notifications pra entrega automática em vez de download manual." }
+      ]
+    },
+    {
+      "id": "case-scenarios",
+      "title": "Seis cenários práticos de triagem",
+      "blocks": [
+        { "type": "p", "text": "Seis casos reais de treinamento, cada um trabalhado com o fluxo de triagem de 5 perguntas acima. São a versão concreta de \"como você realmente pensa diante de um alerta\" — o tipo de cenário que uma entrevista de SOC adora perguntar." },
+        { "type": "h3", "text": "1 — Um alerta de nível 12 às 3 da manhã" },
+        { "type": "p", "text": "A regra 100200 dispara no victim-linux, fora do horário comercial. Resposta: checar o syscheck.path exato e o tipo de evento; correlacionar com qualquer login PAM recente no mesmo agente, próximo no tempo; checar syscheck.sha256_after contra hashes conhecidos como bons; confirmar que a Resposta Ativa realmente disparou via active-responses.log; documentar o horário incomum como fator agravante independente do resultado." },
+        { "type": "h3", "text": "2 — 50 alertas do Suricata em 10 minutos" },
+        { "type": "p", "text": "Mesma assinatura de baixo nível (\"Ethertype unknown\"), repetida. Resposta: uma assinatura idêntica, repetida, de baixo nível é a assinatura clássica de ruído (tráfego de broadcast de IoT/impressora), não de um ataque — confirmar a origem, depois construir uma regra de tuning pra rebaixar ela (exatamente o que a regra 100101 faz). O movimento errado é ignorar visualmente sem realmente ajustar — o próximo turno só reinvestiga o mesmo ruído do zero." },
+        { "type": "h3", "text": "3 — Um comando sudo incomum de um usuário conhecido" },
+        { "type": "p", "text": "Alerta 5407 (MITRE T1548.003), um comando que literalmente bate com o padrão que a regra 100200 foi construída pra pegar, executado por uma conta editor conhecida. Resposta: a pergunta real não é \"isso é suspeito\" — claramente bate com um padrão monitorado — é \"isso é um teste conhecido ou um ataque real\", resolvida correlacionando o full_log, o horário exato, e o histórico daquele usuário." },
+        { "type": "h3", "text": "4 — Um falso positivo recorrente (VBoxService)" },
+        { "type": "p", "text": "A regra 92910 dispara diariamente numa VM do VirtualBox. Resposta: um falso positivo conhecido e documentado do comportamento das Guest Additions — anote como exceção conhecida uma vez (um comentário na regra ou uma nota no runbook) em vez de reinvestigar do zero todo santo dia." },
+        { "type": "h3", "text": "5 — Só metade dos relatórios forenses esperados aparece" },
+        { "type": "p", "text": "O caso real da Fase 15: cerca de 100 arquivos renomeados de uma vez deveriam produzir ~300 disparos de Resposta Ativa, mas só ~100 relatórios forenses aparecem, sem nenhum erro registrado em lugar nenhum. Resposta: confirmar a contagem de disparos independentemente (grep no log de AR por linhas STARTED) antes de assumir que algo está quebrado; quando um campo de ID único está envolvido e a contagem vem menor sem nenhum erro, suspeite de uma colisão, não de uma falha — verifique se o campo de ID realmente tem resolução suficiente pra taxa de eventos. Essa é exatamente a investigação que encontrou o bug de ID de incidente detalhado na página de Automação." },
+        { "type": "h3", "text": "6 — Um endpoint some do dashboard" },
+        { "type": "p", "text": "Um agente aparece como Disconnected por 40 minutos, sem alerta prévio. Resposta: três possibilidades reais — um reboot de manutenção normal, um serviço de agente Wazuh que travou, ou um atacante matando a telemetria de propósito antes de agir (\"cegueira do SOC\" como sinal em si mesmo). Trate a terceira possibilidade como real até ser descartada: cheque se há uma janela de manutenção agendada, tente contato direto (SSH/RDP), e escale como incidente se a lacuna continuar sem explicação — nunca vá direto pra \"provavelmente é só a rede\"." }
+      ]
+    },
+    {
+      "id": "custom-rules",
+      "title": "Escrevendo regras de detecção customizadas",
+      "blocks": [
+        { "type": "p", "text": "O conjunto de regras embutido do Wazuh vive em /var/ossec/ruleset/rules/*.xml e é sobrescrito em toda atualização — nunca editado diretamente. Todas as regras customizadas vivem em exatamente um lugar: /var/ossec/etc/rules/local_rules.xml, que sobrevive a atualizações. IDs abaixo de 100000 são reservados pro conjunto de regras embutido; toda regra customizada aqui usa 100000+." },
+        { "type": "h3", "text": "Regra 100200 — o detector de comportamento de ransomware (nível 12)" },
+        { "type": "code", "lang": "xml", "code": "<group name=\"local,media_isolation,\">\n  <rule id=\"100200\" level=\"12\">\n    <if_sid>550,553,554</if_sid>\n    <field name=\"file\">^/srv/media</field>\n    <description>Media storage node: file integrity change detected in /srv/media (possible ransomware behavior)</description>\n    <group>media_isolation,</group>\n  </rule>\n</group>" },
+        { "type": "p", "text": "Isso refina as regras genéricas de FIM do Wazuh — 550 (conteúdo modificado), 553 (deletado), 554 (adicionado) — pra só disparar em caminhos sob /srv/media. Uma descoberta contra-intuitiva de testes reais: um mv/renomeação no Linux gera 553 + 554 (deleção do caminho antigo, adição do novo), nunca 550." },
+        { "type": "h3", "text": "Regra 100101 — ajuste de ruído (nível 3)" },
+        { "type": "code", "lang": "xml", "code": "<rule id=\"100101\" level=\"3\">\n  <if_sid>86601</if_sid>\n  <match>Ethertype unknown</match>\n  <description>Suricata: Ethertype unknown - downgraded (known noise from home network IoT devices)</description>\n  <group>suricata_tuning,</group>\n</rule>" },
+        { "type": "p", "text": "A direção oposta da 100200: essa rebaixa a severidade em vez de escalar, e usa <match> (texto livre) em vez de <field> (estruturado) — as duas formas válidas de filtrar uma regra do Wazuh." },
+        { "type": "h3", "text": "Metodologia" },
+        { "type": "ol", "items": [
+          "Fazer backup do local_rules.xml primeiro.",
+          "Sempre adicionar no final do arquivo — nunca inserir via substituição automatizada de texto. Um str.replace() mirando </group> pode silenciosamente bater na tag de grupo aninhada errada, corrompendo o arquivo. Isso aconteceu duas vezes.",
+          "Checar duplicata de ID (grep -c) antes de atribuir um novo.",
+          "Reiniciar o wazuh-manager.",
+          "Validar com wazuh-logtest pra regras baseadas em log, ou disparar o evento interno real (ex: modificar um arquivo monitorado) pra coisas como FIM que não têm linha de log pra simular."
+        ]},
+        { "type": "callout", "variant": "danger", "title": "A lição dos 90 segundos que custou um dia inteiro de debug", "text": "No hardware de 2 núcleos deste laboratório, o motor de regras leva até 90 segundos pra recarregar completamente depois de um `systemctl restart wazuh-manager`. Testar antes dessa janela passar dá uma impressão completamente falsa de \"essa regra não funciona\". Esse único fato de timing foi confundido com um bug de sintaxe por boa parte de um dia durante o desenvolvimento da Resposta Ativa." }
+      ]
+    },
+    {
+      "id": "users-api",
+      "title": "Usuários, papéis e a API do manager",
+      "blocks": [
+        { "type": "p", "text": "O Wazuh tem seu próprio RBAC interno, separado das contas em nível de SO do servidor: usuários do dashboard (que podem logar na interface web) e usuários de API (usados pela API REST do manager na porta 55000, com a qual o próprio dashboard conversa internamente)." },
+        { "type": "ul", "items": [
+          "Usuários/papéis do dashboard: Server Management → Security. Papéis são construídos a partir de políticas (ex: \"acesso somente leitura a agentes\") em vez de uma lista de permissão única — o mesmo modelo que TheHive e Cortex usam, só com terminologia diferente.",
+          "Usuários de API: um conjunto de credenciais completamente separado (`wazuh` / `wazuh-wui` por padrão) usado só pra chamadas de API manager-pra-manager e dashboard-pra-manager — essa distinção é o que causou o bug do instalador descrito abaixo."
+        ]}
+      ]
+    },
+    {
+      "id": "cve-workflow",
+      "title": "O fluxo de aceitação de risco de CVE",
+      "blocks": [
+        { "type": "p", "text": "O módulo Vulnerability Detection do Wazuh correlaciona o inventário de pacotes do syscollector contra bancos de dados de CVE conhecidos, por agente. É essa a fonte de toda CVE na página de Gestão de CVEs deste site." },
+        { "type": "callout", "variant": "warning", "title": "Não existe um botão nativo de \"marcar como aceito\"", "text": "O Vulnerability Detection escreve direto num índice de estado, contornando o motor de regras completamente — então o truque antigo de uma regra level=0 no local_rules.xml não faz nada aqui. Aceitar o risco não muda a versão do pacote instalado, então a CVE continua contando no total bruto até que uma correção de verdade seja lançada. O que você pode fazer é filtrar sua visão de triagem — os dados subjacentes ficam intactos, o que é o comportamento correto pra uma trilha de auditoria." },
+        { "type": "h3", "text": "A solução de query salva, passo a passo" },
+        { "type": "ol", "items": [
+          "Vulnerability Detection → selecionar o agente → especificamente a aba Inventory (não a aba Dashboard — os cards de resumo dela não recalculam de forma confiável com a barra de busca).",
+          "Na barra de busca, excluir toda CVE já revisada e aceita:"
+        ]},
+        { "type": "code", "code": "not vulnerability.id: (\"CVE-2022-0400\" or \"CVE-2023-6602\" or \"CVE-2026-53355\" or \"CVE-2026-53246\")" },
+        { "type": "ol", "items": [
+          "Salvar a query (o ícone de página/disco ao lado da barra de busca), nomear em inglês (ex: active-vulns-excluding-accepted-risk) pra bater com a convenção deste laboratório de que artefatos técnicos ficam em inglês independente do idioma da documentação.",
+          "Manter \"Include filters\" ligado (pra que o filtro de agente também seja salvo), e \"Include time filter\" desligado — o estado de vulnerabilidade não deveria depender de uma janela de tempo."
+        ]},
+        { "type": "h3", "text": "Por que o total não cai imediatamente depois de uma correção real" },
+        { "type": "p", "text": "Duas razões independentes, ambas confirmadas neste laboratório: o agente precisa reenviar o inventário de pacotes atualizado (forçar com `systemctl restart wazuh-agent`), e o total do painel reflete toda CVE daquele agente, não só as que acabaram de ser corrigidas." },
+        { "type": "h3", "text": "Dois casos reais da campanha de 24 CVEs" },
+        { "type": "p", "text": "A tabela completa vive na página de Gestão de CVEs — dois valem destaque aqui porque mudaram como o processo de triagem inteiro funcionou depois." },
+        { "type": "callout", "variant": "tip", "title": "Corrigindo 8 CVEs numa ação só", "text": "freerdp2 e ffmpeg tinham múltiplas CVEs críticas (CVSS 9.1–9.8) sem correção no canal padrão do Ubuntu 24.04 — só via Ubuntu Pro ESM Apps (gratuito pra uso pessoal, até 5 máquinas). Antes de remover o pacote de vez, checar o uso real (apt-mark showmanual, apt-cache rdepends, histórico do bash) mostrou que freerdp2 era uma dependência genuína do patator, uma ferramenta de teste de força bruta realmente em uso — então a decisão foi corrigir, não remover. Uma ativação do Ubuntu Pro mais um apt install --only-upgrade corrigiu 8 CVEs de uma vez, já que os pontos de release do ESM são cumulativos." },
+        { "type": "callout", "variant": "info", "title": "CVEs fantasmas de um kernel órfão", "text": "Uma CVE continuava aparecendo contra linux-image-6.8.0-134-generic, mas `uname -r` confirmava que o kernel rodando era o 136. O Ubuntu não remove automaticamente kernels antigos depois de atualizações — esse ficou instalado, nunca inicializado, silenciosamente gerando CVEs. Purgar ele (302 MB liberados) resolveu essa CVE e tudo mais ligado só àquela versão de kernel morta, de uma vez. Lição: pra qualquer CVE de kernel, checar `uname -r` antes de qualquer outra coisa." }
+      ]
+    },
+    {
+      "id": "network-story",
+      "title": "A história da visibilidade de rede do Suricata",
+      "blocks": [
+        { "type": "p", "text": "Essa é a investigação mais instrutiva de todo o laboratório — um ponto cego arquitetural real, encontrado ao vivo, não planejado com antecedência." },
+        { "type": "h3", "text": "A pergunta que começou tudo" },
+        { "type": "p", "text": "\"Se alguém rodar um scan nmap na minha rede, isso vai aparecer no meu dashboard?\" A resposta honesta acabou sendo: não no dashboard que existia na época — aquele estava filtrado pra media_isolation, e um scan de rede não gera nenhum evento de integridade de arquivo. Reconhecimento de rede precisava de um dashboard dedicado baseado no Suricata." },
+        { "type": "h3", "text": "Descobrindo os campos reais (nunca chute — confirme no Discover)" },
+        { "type": "table", "headers": ["Campo", "Exemplo real"], "rows": [
+          ["agent.name", "soc-server"],
+          ["data.alert.signature", "SURICATA Ethertype unknown"],
+          ["data.alert.category", "Generic Protocol Command Decode"],
+          ["data.src_ip / data.dest_ip", "192.168.178.187"],
+          ["rule.id / rule.groups", "100101 / local, suricata, suricata_tuning"]
+        ]},
+        { "type": "callout", "variant": "warning", "title": "Quase todo o volume bruto já era ruído tratado", "text": "Filtrando pela regra genérica do Suricata (86601), quase todo resultado na verdade voltava marcado como rule.id:100101 — a regra de ajuste de ruído. O filtro final do dashboard virou `rule.groups:\"suricata\" and not rule.id:\"100101\"`, que derrubou a contagem de 413.382 resultados brutos (30 dias) pra 1.763." },
+        { "type": "h3", "text": "O que os dados reais, depois do filtro, mostraram" },
+        { "type": "p", "text": "Mesmo depois de excluir a regra de ruído conhecida, \"SURICATA Ethertype unknown\" ainda era a assinatura mais comum — 1.212 das 1.763 restantes (cerca de 69%), significando que a condição da regra de ajuste não pegava toda variante. O resto era quase inteiramente benigno: tráfego de cliente P2P do Spotify, avisos de pacote truncado, user-agents de atualização do APT, e dois IPs da AWS CloudFront. Nenhuma assinatura de categoria de ataque tinha aparecido ainda — esperado, já que ninguém tinha escaneado nada deliberadamente naquela janela de 30 dias." },
+        { "type": "h3", "text": "O teste ao vivo que provou o ponto cego" },
+        { "type": "p", "text": "Rodei `nmap -Pn 192.168.178.177` contra o victim-linux, direto de outra máquina da LAN — deliberadamente sem passar pelo soc-server. Resultado: o total de alertas foi de 1.763 pra 1.764, e esse único +1 era ruído de fundo do Spotify sem relação nenhuma. O scan estava completamente invisível." },
+        { "type": "callout", "variant": "danger", "title": "Não é um bug — é uma limitação arquitetural real", "text": "Sem um switch gerenciado configurado com SPAN/espelhamento de porta, um sensor Suricata único só enxerga tráfego entrando ou saindo da interface de rede do próprio host — nunca tráfego entre dois outros dispositivos na mesma LAN comutada. Isso é fundamental em como captura de pacote funciona, não é algo que uma regra nova poderia corrigir." },
+        { "type": "h3", "text": "A correção: parar de espelhar, começar a distribuir" },
+        { "type": "p", "text": "Em vez de correr atrás de hardware de porta SPAN, o laboratório mudou pra um modelo distribuído: instalar um sensor Suricata independente em cada máquina. Cada host vira seu próprio ponto de observação, vendo exatamente o que entra e sai dele mesmo, independente da topologia de rede." },
+        { "type": "h3", "text": "8 sensores, 3 sistemas operacionais, 3 conjuntos completamente diferentes de problemas" },
+        { "type": "p", "text": "Linux (4 máquinas — victim-linux, tales-desktop, kali-vm, kali-msi-laptop) foi o caminho fácil: instalação apt idêntica em Ubuntu 24.04, Ubuntu 26.04 e Kali Rolling, sem precisar de PPA. A única pegadinha repetida foi confirmar o nome real da interface (`ip -4 -br address`) em vez de assumir eth0." },
+        { "type": "code", "code": "sudo apt update && sudo apt install -y suricata jq\nip -4 -br address\nsudo suricata-update\nsudo suricata -T -c /etc/suricata/suricata.yaml -v\nsudo systemctl enable --now suricata" },
+        { "type": "p", "text": "Windows foi bem mais trabalhoso. Sem suricata-update, então o conjunto de regras Emerging Threats teve que ser baixado e reconciliado manualmente contra uma config padrão referenciando arquivos de regra que não existiam no pacote. Dois achados sérios:" },
+        { "type": "ul", "items": [
+          "Passar o nome amigável da interface (-i Ethernet) trava o Suricata com uma violação de acesso (0xC0000005) nessa build. A correção é o caminho completo do dispositivo Npcap, \\Device\\NPF_{GUID}, tirado do Get-NetAdapter.",
+          "O serviço nativo do Suricata no Windows (--service-install) registra e mostra \"Running\", depois morre silenciosamente segundos depois com \"Signal Received. Stopping engine\" e nada útil no Event Log — aparentemente morto pelo Service Control Manager por não confirmar status rápido o suficiente. Corrigido abandonando o serviço nativo por completo em favor de uma entrada no Task Scheduler disparada AtStartup como SYSTEM, que não tem timeout equivalente."
+        ]},
+        { "type": "p", "text": "macOS ficou no meio-termo: o Homebrew traz o Suricata com o conjunto de regras Emerging Threats pré-instalado (sem reconciliação manual necessária, diferente do Windows), mas o sed do BSD não é o sed do GNU — sem sintaxe `0,/pattern/`, e -i precisa de um sufixo de backup explícito — e a fórmula do Homebrew não implementa `brew services` de jeito nenhum, então a supervisão do processo teve que ser um plist de LaunchDaemon escrito à mão com RunAtLoad e KeepAlive, o equivalente no macOS da correção do Task Scheduler do Windows." },
+        { "type": "callout", "variant": "info", "title": "Resultado", "text": "8 sensores ativos (soc-server, victim-linux, tales-desktop, kali-vm, kali-msi-laptop, win10-vm, win-server-vm, mac-laptop), cada um aparecendo automaticamente num painel network-alerts-by-sensor sem nenhuma reconfiguração de dashboard." }
+      ]
+    },
+    {
+      "id": "portscan-gap",
+      "title": "A lacuna de detecção de scan de porta",
+      "blocks": [
+        { "type": "p", "text": "Mesmo com os 8 sensores ativos, um scan nmap completo de acompanhamento (`nmap -Pn -sV`) ainda não produzia nenhum alerta em lugar nenhum — uma segunda investigação, em camadas." },
+        { "type": "ol", "items": [
+          "Primeira causa: o scan tinha sido rodado acidentalmente contra o próprio IP da máquina, da mesma máquina. Tráfego endereçado a si mesmo é roteado pela interface de loopback do kernel — nunca toca a placa de rede física em que o Suricata está capturando. Não é um bug de sensor; é rede básica.",
+          "Segunda causa, encontrada depois de rodar o scan de novo entre dois hosts de verdade: o Suricata, diferente do Snort, não tem nenhum pré-processador genérico de scan de porta — só correspondência de assinatura. Um scan SYN sem payload contra portas fechadas/filtradas não bate com nada no conjunto de regras Emerging Threats."
+        ]},
+        { "type": "p", "text": "Corrigido com uma regra de detecção customizada baseada em limite, replicada nos 8 sensores:" },
+        { "type": "code", "code": "alert tcp any any -> $HOME_NET any (msg:\"LOCAL Possible TCP Port Scan Detected\"; flags:S; threshold: type both, track by_src, count 20, seconds 60; classtype:attempted-recon; sid:9000001; rev:1;)" },
+        { "type": "callout", "variant": "warning", "title": "Mais uma peculiaridade de plataforma pelo caminho", "text": "No win-server-vm, reiniciar a entrada do Task Scheduler não substituía um processo Suricata órfão deixado de um boot de VM anterior — só o Start-ScheduledTask não bastava. Corrigido com um ciclo explícito de Stop-Process -Force + Stop-ScheduledTask + Start-ScheduledTask." }
+      ]
+    },
+    {
+      "id": "installer-bugs",
+      "title": "Conseguindo instalar o Wazuh: dois bugs reais",
+      "blocks": [
+        { "type": "h3", "text": "Bug 1 — o instalador que desinstalou um indexador saudável" },
+        { "type": "p", "text": "No servidor de 2 núcleos, os daemons do manager legitimamente levavam uns 45 segundos pra iniciar — mais que o timeout padrão de início do systemd. O script oficial wazuh-install.sh tratou isso como uma falha fatal e reverteu tudo automaticamente, incluindo o componente indexador que já estava saudável. Corrigido com um drop-in do systemd definindo TimeoutStartSec=600." },
+        { "type": "h3", "text": "Bug 2 — um problema conhecido do upstream sem erro visível" },
+        { "type": "p", "text": "Uma segunda tentativa de instalação bateu num bug documentado do upstream (wazuh/wazuh#24587): a etapa de verificação de usuários de API do instalador consulta a API REST do manager pra confirmar que as contas existem, depois reverte tudo em qualquer falha — sem nunca mostrar a resposta bruta da API que explicaria o motivo." },
+        { "type": "p", "text": "A cópia local do script foi corrigida pra avisar-e-continuar em vez de reverter, e pra despejar a resposta bruta da API pra diagnóstico. O despejo voltou vazio, apontando pra causa raiz real: a etapa de aquisição de token do instalador estava autenticando com o conjunto de credenciais errado — misturando as credenciais admin do indexador com o sistema de autenticação wazuh/wazuh-wui, completamente separado, da API do manager — então as senhas de API recém-geradas nunca foram realmente aplicadas onde precisavam." },
+        { "type": "p", "text": "Corrigido sem nenhuma credencial válida preexistente invocando o próprio framework de segurança Python local do Wazuh diretamente como root pra resetar as duas contas de API, depois validando a correção com um teste de token JWT — um token válido de 398 caracteres em vez da resposta de erro de ~58 caracteres que estava voltando." }
+      ]
+    }
+  ]
+}

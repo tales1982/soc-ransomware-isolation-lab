@@ -1,0 +1,89 @@
+{
+  "title": "TheHive",
+  "subtitle": "Gestão de casos / SOAR — onde um alerta do Wazuh vira uma investigação rastreada.",
+  "intro": [
+    { "type": "p", "text": "O Wazuh detecta e correlaciona; ele não tem noção de \"caso\", analista designado, ou checklist de tarefas. O TheHive é a camada acima disso — todo alerta de nível 7 ou mais é enviado pra ele automaticamente, onde pode ser triado, promovido a caso usando um template padronizado, e trabalhado tarefa por tarefa." },
+    { "type": "p", "text": "Ele roda na própria VM dedicada (thehive-vm, 8GB RAM / 4 vCPU / 80GB, em bridge na mesma LAN de todo outro agente), como uma stack Docker Compose: TheHive 5.2, Cortex 3.1.8, Cassandra 4.1 pro armazenamento, e Elasticsearch 7.17.13 como o índice de busca compartilhado." }
+  ],
+  "sections": [
+    {
+      "id": "install",
+      "title": "Instalando a stack",
+      "blocks": [
+        { "type": "p", "text": "Quatro serviços, um docker-compose.yml. Cassandra e Elasticsearch sobem primeiro, depois Cortex, depois TheHive por último — o TheHive precisa de uma chave de API do Cortex funcionando já disponível na config dele antes de subir de forma útil." },
+        { "type": "code", "lang": "yaml", "code": "services:\n  cassandra:\n    image: cassandra:4.1\n    environment:\n      - MAX_HEAP_SIZE=1G\n      - HEAP_NEWSIZE=1G\n      - CASSANDRA_CLUSTER_NAME=thp\n\n  elasticsearch:\n    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.13\n    environment:\n      - discovery.type=single-node\n      - xpack.security.enabled=false\n      - \"ES_JAVA_OPTS=-Xms1g -Xmx1g\"\n\n  cortex:\n    image: thehiveproject/cortex:3.1.8\n    depends_on: [elasticsearch]\n    ports: [\"9001:9001\"]\n    volumes:\n      - ./cortex/application.conf:/etc/cortex/application.conf\n      - /var/run/docker.sock:/var/run/docker.sock\n\n  thehive:\n    image: strangebee/thehive:5.2\n    depends_on: [cassandra, elasticsearch, cortex]\n    ports: [\"9000:9000\"]\n    volumes:\n      - ./thehive/application.conf:/etc/thehive/application.conf" },
+        { "type": "callout", "variant": "info", "title": "Uma pegadinha em nível de host antes de qualquer coisa funcionar", "text": "O Elasticsearch exige o parâmetro de kernel `vm.max_map_count >= 262144` na VM host de verdade, definido via /etc/sysctl.d/ antes dos containers poderem subir — uma correção só em nível de container não basta." },
+        { "type": "p", "text": "No primeiro boot, o TheHive importa 707 padrões MITRE ATT&CK automaticamente — a mesma taxonomia já usada nos alertas do Wazuh e nos templates de caso deste site." }
+      ]
+    },
+    {
+      "id": "orgs-users",
+      "title": "Organizações e usuários — a lição que mais importou",
+      "blocks": [
+        { "type": "callout", "variant": "danger", "title": "A organização padrão é uma armadilha", "text": "Tanto TheHive quanto Cortex vêm com uma organização padrão reservada (\"admin\" no TheHive, \"cortex\" no Cortex) feita puramente pra administração da plataforma — criar outras organizações e usuários. Não é onde o trabalho de verdade acontece, e deliberadamente não consegue fazer trabalho de verdade: um usuário nessa org não pode ter os papéis necessários pra criar alertas, habilitar analisadores, ou gerenciar casos. A primeira chamada de API real contra ela falhou com um seco `403 — you don't have the permission manageAlert/create`, que é exatamente o comportamento pretendido da plataforma, não um bug." },
+        { "type": "p", "text": "A correção é a mesma nas duas ferramentas: criar uma segunda organização de trabalho de verdade (este laboratório usa `soc-lab` tanto no TheHive quanto no Cortex), e dentro dela criar dois tipos de conta — uma conta de analista normal, com senha, pra humanos, e uma conta tipo Service autenticando só via API key pra automação." },
+        { "type": "h3", "text": "TheHive: criando a organização de trabalho" },
+        { "type": "ol", "items": [
+          "Logar com a conta superadmin inicial admin@thehive.local (Organisations → a org admin reservada).",
+          "Organisations → + → criar uma organização nova, ex: soc-lab.",
+          "Dentro de soc-lab → Users → Add User → uma conta normal com o perfil org-admin, uma senha de verdade, usada pra investigação do dia a dia.",
+          "Um segundo usuário tipo Service (ex: wazuh-integration@soc-lab.local) com o perfil analyst, sem senha — só uma API key — usado exclusivamente pelo script de integração do Wazuh."
+        ]},
+        { "type": "h3", "text": "Cortex: exatamente o mesmo padrão, terminologia diferente" },
+        { "type": "p", "text": "O Cortex usa caixinhas de papel granulares em vez de um único dropdown de perfil: read, analyze, orgAdmin. Um usuário da org de trabalho precisa dos três pra navegar e habilitar analisadores do catálogo — o seletor de papel da org padrão reservada só oferece \"superadmin\", o que já é o sinal de que você está na org errada." }
+      ]
+    },
+    {
+      "id": "case-templates",
+      "title": "Quatro templates de caso padronizados",
+      "blocks": [
+        { "type": "p", "text": "Em vez de começar toda investigação de um caso em branco, quatro templates foram criados via API (um script Python curto usando só o urllib da biblioteca padrão, sem dependências externas) pra que qualquer alerta possa ser promovido direto pra um checklist estruturado." },
+        { "type": "table", "headers": ["Template", "Severidade", "Tarefas"], "rows": [
+          ["Port Scan / Network Reconnaissance", "Média", "6 — confirmar origem/destino, mapear pra MITRE T1046/T1595.002, verificar máquina autorizada, decidir fechar ou escalar"],
+          ["SSH Brute-force Investigation", "Alta", "7 — contar tentativas, mapear pra T1110.001/003, checar login bem-sucedido depois de falhas, forçar reset se comprometido"],
+          ["Ransomware / FIM Critical Alert", "Crítica", "8 — identificar arquivos afetados, T1486/T1490, isolar host, preservar evidência, identificar paciente zero, restaurar do backup"],
+          ["CVE / Vulnerability Triage", "Média", "7 — reflete deliberadamente o mesmo fluxo de corrigir/mitigar/aceitar usado pras 24 CVEs reais na página de Gestão de CVEs"]
+        ]},
+        { "type": "callout", "variant": "tip", "text": "A última tarefa do template de CVE é literalmente \"criar/atualizar o arquivo na pasta do repositório vulnerabilidades/\" — o fluxo de gestão de caso e o hábito real de documentação são o mesmo processo, não duas coisas separadas." }
+      ]
+    },
+    {
+      "id": "wazuh-integration",
+      "title": "Conectando o Wazuh ao TheHive",
+      "blocks": [
+        { "type": "p", "text": "O Wazuh não tem nenhum conector nativo pro TheHive. A ponte usa o próprio mecanismo de integração customizada do Wazuh (wazuh-integratord), que chama um script em todo alerta que bate com um nível configurado, passando o caminho do arquivo de alerta mais uma API key e uma URL de webhook como argumentos." },
+        { "type": "code", "lang": "xml", "code": "<integration>\n  <name>custom-thehive</name>\n  <hook_url>http://192.168.178.164:9000</hook_url>\n  <api_key>...</api_key>\n  <alert_format>json</alert_format>\n  <level>7</level>\n</integration>" },
+        { "type": "p", "text": "O script em si (um script shell de wrapper mais um arquivo Python, o padrão usado por todas as integrações customizadas do Wazuh) lê o JSON do alerta, mapeia o rule.level do Wazuh pra uma severidade do TheHive (1–4), e faz um POST na API de criação de alerta do TheHive com um token Bearer." },
+        { "type": "h3", "text": "Dois bugs reais no caminho de uma integração funcionando" },
+        { "type": "ul", "items": [
+          "O editor de linha do terminal estava corrompendo silenciosamente heredocs grandes colados contendo chaves (comuns em f-strings do Python). Contornado codificando o script inteiro em base64 localmente e decodificando numa linha só no host remoto — completamente imune à interpretação de caracteres pelo shell/editor.",
+          "O primeiro teste ao vivo retornou HTTP 403 com o mesmo erro de permissão manageAlert/create descrito acima — usando a API key da organização admin reservada em vez de uma chave da org de trabalho. Trocar pra uma API key escopada em soc-lab corrigiu na hora."
+        ]},
+        { "type": "callout", "variant": "info", "title": "Validação", "text": "Um alerta de teste manual retornou HTTP 201 — e em minutos, alertas reais do Wazuh (um evento \"Listened ports status changed\" e uma anomalia de rootcheck) apareceram na fila do TheHive sem nenhuma ação manual adicional, confirmando que o daemon integratord estava chamando o script corretamente em produção, não só no teste manual." }
+      ]
+    },
+    {
+      "id": "reading-real-alert",
+      "title": "Lendo um alerta real de ponta a ponta — exemplo prático",
+      "blocks": [
+        { "type": "p", "text": "Um alerta genuíno que chegou automaticamente através da integração acima, exatamente como aparece na aba General do TheHive — não é um exemplo construído. É o mesmo fluxo de triagem de 5 perguntas usado na página do Wazuh, aplicado a um caso ao vivo." },
+        { "type": "code", "lang": "json", "code": "{\n  \"timestamp\": \"2026-08-05T07:13:50.366+0200\",\n  \"rule\": {\n    \"level\": 7,\n    \"description\": \"Integrity checksum changed.\",\n    \"id\": \"550\",\n    \"mitre\": { \"id\": [\"T1565.001\"], \"tactic\": [\"Impact\"], \"technique\": [\"Stored Data Manipulation\"] },\n    \"firedtimes\": 24,\n    \"groups\": [\"ossec\", \"syscheck\", \"syscheck_entry_modified\", \"syscheck_file\"]\n  },\n  \"agent\": { \"id\": \"005\", \"name\": \"tales-desktop\", \"ip\": \"192.168.178.92\" },\n  \"manager\": { \"name\": \"soc-server\" },\n  \"full_log\": \"File '/etc/cups/subscriptions.conf.O' modified\\nMode: realtime\\nChanged attributes: size,inode,mtime,md5,sha1,sha256\\nSize changed from '397' to '699'\\nOld md5sum was: '6ae849634dec4fa5803ae7d8d23fa4da'\\nNew md5sum is : 'c78975ea11f60fee3c7252e019985309'\",\n  \"syscheck\": {\n    \"path\": \"/etc/cups/subscriptions.conf.O\",\n    \"mode\": \"realtime\",\n    \"uid_after\": \"0\",\n    \"gid_after\": \"7\",\n    \"uname_after\": \"root\",\n    \"gname_after\": \"lp\",\n    \"changed_attributes\": [\"size\", \"inode\", \"mtime\", \"md5\", \"sha1\", \"sha256\"],\n    \"event\": \"modified\"\n  },\n  \"decoder\": { \"name\": \"syscheck_integrity_changed\" },\n  \"location\": \"syscheck\"\n}" },
+        { "type": "h3", "text": "1 — Reconhecer" },
+        { "type": "p", "text": "rule.id 550, nível 7 — um alerta genérico de FIM do Wazuh de \"conteúdo modificado\", não a regra crítica própria do laboratório 100200 (nível 12, restrita a /srv/media). O rule.mitre.id T1565.001 (\"Stored Data Manipulation\") é o mapeamento genérico padrão do Wazuh pra qualquer mudança de conteúdo de arquivo — categoriza a técnica, não significa por si só que algo malicioso aconteceu." },
+        { "type": "h3", "text": "2 — Contextualizar" },
+        { "type": "p", "text": "syscheck.path é /etc/cups/subscriptions.conf.O — CUPS, o subsistema de impressão do Linux, reescrevendo o próprio arquivo de estado de assinaturas. Propriedade depois da mudança: uname_after root, gname_after lp (grupo \"line printer\") — exatamente consistente com o serviço de impressão editando a própria configuração. Criticamente, esse caminho não está sob /srv/media (o ativo protegido) nem é um arquivo sensível de segurança como /etc/passwd ou /etc/sudoers." },
+        { "type": "h3", "text": "3 — Correlacionar" },
+        { "type": "p", "text": "rule.firedtimes: 24 — essa regra exata já disparou 24 vezes pra esse tipo de evento nesse agente. Uma contagem alta de firedtimes numa regra de baixa severidade é ela mesma um sinal de correlação: aponta pra um padrão de fundo recorrente e estabelecido, em vez de um evento isolado e novo que vale escalar." },
+        { "type": "h3", "text": "4 — Decidir" },
+        { "type": "p", "text": "Tudo aponta na mesma direção — caminho do arquivo, propriedade, recorrência — então o julgamento razoável é: comportamento de sistema esperado, não um evento de segurança. Fechar, não promover pra caso." },
+        { "type": "h3", "text": "5 — Documentar e resolver" },
+        { "type": "p", "text": "Duas ações concretas no TheHive, dependendo do que o alerta acabar sendo:" },
+        { "type": "ul", "items": [
+          "Se confirmado benigno (este caso): fechar o alerta direto da lista de alertas — nenhum caso necessário. Já que esse padrão exato já tem firedtimes: 24, é um forte candidato pra uma regra de ajuste de volta no Wazuh, o mesmo padrão já usado pra regra 100101 (que rebaixa o ruído \"Ethertype unknown\" do Suricata): adicionar uma regra no local_rules.xml que abaixa a severidade de mudanças syscheck especificamente sob /etc/cups/, pra que isso pare de chegar na fila do TheHive de vez, enquanto caminhos que realmente importam ficam intocados.",
+          "Se em vez disso o contexto apontasse pro outro lado — um caminho desconhecido, propriedade inesperada, nenhum histórico prévio de firedtimes — o mesmo alerta seria promovido direto pra um caso usando o template Ransomware / FIM Critical Alert da seção acima, e trabalhado através do checklist de 8 tarefas dele."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "As outras abas de um alerta", "text": "Observables, TTPs, Similar Cases e Similar Alerts existem exatamente pra esse tipo de decisão: Similar Alerts mostraria toda ocorrência anterior de firedtimes:24 de relance, sem precisar voltar pra tela de Discover do próprio Wazuh pra reconstruir o histórico manualmente." }
+      ]
+    }
+  ]
+}

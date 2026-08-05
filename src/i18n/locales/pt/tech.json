@@ -1,0 +1,83 @@
+{
+  "title": "Tecnologias",
+  "subtitle": "Cada ferramenta aqui foi escolhida por um motivo e forçada o suficiente pra encontrar seus limites reais.",
+  "core": {
+    "title": "O stack principal",
+    "items": [
+      {
+        "id": "wazuh",
+        "name": "Wazuh",
+        "tagline": "SIEM / XDR — o cérebro do laboratório",
+        "description": "SIEM open-source que centraliza logs de todo endpoint, roda Monitoramento de Integridade de Arquivos, correlaciona eventos em regras, rastreia CVEs contra pacotes instalados, e dispara a automação de Resposta Ativa. Tudo mais neste laboratório alimenta o Wazuh ou reage a ele.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "suricata",
+        "name": "Suricata",
+        "tagline": "IDS/IPS de rede — implantado 8 vezes, não uma só",
+        "description": "Detecção de intrusão de rede baseada em assinaturas. Começou como um sensor único no servidor SIEM, que acabou tendo uma lacuna arquitetural real — tráfego entre duas outras máquinas da LAN era invisível pra ele. Corrigido instalando um sensor independente em cada máquina, em vez de depender de espelhamento de porta.",
+        "hasDeepDive": true,
+        "deepDiveLabel": "Ver a história completa na página Wazuh"
+      },
+      {
+        "id": "thehive",
+        "name": "TheHive",
+        "tagline": "Gestão de casos / SOAR",
+        "description": "Onde alertas viram investigações. Todo alerta do Wazuh de nível 7 ou mais é enviado pra cá automaticamente via um script de integração customizado, e quatro templates de caso padronizam como um scan de portas, uma tentativa de força bruta, um evento de ransomware ou uma CVE são tratados.",
+        "hasDeepDive": true
+      },
+      {
+        "id": "cortex",
+        "name": "Cortex",
+        "tagline": "Motor de enriquecimento de observáveis",
+        "description": "Emparelhado com o TheHive: pega um IP, hash ou domínio de um caso e consulta automaticamente o AbuseIPDB e o VirusTotal por dados de reputação. Fazer isso funcionar dentro de Docker-em-Docker foi uma das sessões de debug mais profundas de todo o projeto.",
+        "hasDeepDive": true
+      }
+    ]
+  },
+  "supporting": {
+    "title": "Coadjuvantes",
+    "items": [
+      {
+        "name": "Sysmon",
+        "description": "Telemetria profunda do Windows (criação de processos, conexões de rede, mudanças de registro) alimentando o Wazuh a partir dos dois endpoints Windows — o equivalente do auditd pro lado Windows."
+      },
+      {
+        "name": "auditd",
+        "description": "Log de auditoria em nível de kernel do Linux — mudanças de identidade, escalação de privilégio, mudanças de config SSH, e a vigilância de Monitoramento de Integridade de Arquivos no caminho de armazenamento de mídia simulado."
+      },
+      {
+        "name": "Emerging Threats Open",
+        "description": "O conjunto de assinaturas que o Suricata usa — cerca de 52.000 regras nos sensores Linux, ajustado com uma regra customizada pra cortar o ruído de broadcast de dispositivos IoT da rede doméstica."
+      },
+      {
+        "name": "Python 3",
+        "description": "Um motor de automação dedicado (isolado no próprio venv) implementando a cadeia isolar → failover → relatório forense, além do harness de medição de latência usado pros resultados experimentais deste site."
+      },
+      {
+        "name": "Ansible",
+        "description": "Orquestra os endpoints Linux via SSH — a base sobre a qual a automação de isolamento/failover foi construída."
+      },
+      {
+        "name": "containerlab + FRRouting",
+        "description": "Uma topologia de rede virtual (um roteador, dois nós de armazenamento) usada pra simular isolamento em nível de equipamento de rede via docker exec + iptables, depois que a imagem do roteador alvo se mostrou não expor nem SSH nem NETCONF."
+      },
+      {
+        "name": "Samba",
+        "description": "Serviço de compartilhamento de arquivos simulando a estrutura de pastas ingest/live/archive/quarantine do nó de armazenamento de mídia."
+      },
+      {
+        "name": "Ubuntu Pro / ESM",
+        "description": "Manutenção de segurança estendida grátis pra uso pessoal — usada pra corrigir 9 CVEs entre freerdp2, ffmpeg e cJSON que não tinham correção no canal padrão do Ubuntu 24.04."
+      },
+      {
+        "name": "VirtualBox",
+        "description": "Hypervisor rodando toda VM do laboratório: os dois endpoints Windows, uma das duas máquinas Kali, e o servidor dedicado do TheHive/Cortex."
+      },
+      {
+        "name": "Docker / Docker Compose",
+        "description": "Roda toda a stack TheHive + Cortex + Cassandra + Elasticsearch, além da topologia virtual do containerlab e a simulação de isolamento/failover."
+      }
+    ]
+  }
+}

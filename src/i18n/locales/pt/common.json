@@ -1,0 +1,55 @@
+{
+  "site": {
+    "title": "SOC Lab",
+    "subtitle": "Portfólio Blue Team & Isolamento de Ransomware"
+  },
+  "nav": {
+    "home": "Visão geral",
+    "installation": "Instalação",
+    "technologies": "Tecnologias",
+    "wazuh": "Wazuh",
+    "thehive": "TheHive",
+    "cortex": "Cortex",
+    "automation": "Automação",
+    "vulnerabilities": "Gestão de CVEs",
+    "exercises": "Exercícios",
+    "about": "Sobre"
+  },
+  "actions": {
+    "toggleTheme": "Alternar tema",
+    "toggleLanguage": "Alternar idioma",
+    "openMenu": "Abrir menu",
+    "closeMenu": "Fechar menu",
+    "readMore": "Ler mais",
+    "backToTop": "Voltar ao topo",
+    "copy": "Copiar",
+    "copied": "Copiado!",
+    "reset": "Resetar progresso",
+    "viewOnGithub": "Ver no GitHub"
+  },
+  "footer": {
+    "builtWith": "Construído com React, Redux Toolkit, i18next e Tailwind CSS.",
+    "rights": "Todos os dados mostrados aqui vêm de um laboratório caseiro real, construído do zero."
+  },
+  "labels": {
+    "difficulty": "Dificuldade",
+    "time": "Tempo",
+    "tools": "Ferramentas",
+    "mitre": "MITRE ATT&CK",
+    "risk": "Risco",
+    "category": "Categoria",
+    "status": "Status",
+    "severity": "Severidade",
+    "package": "Pacote",
+    "agent": "Agente",
+    "easy": "Fácil",
+    "medium": "Médio",
+    "hard": "Difícil",
+    "low": "Baixo",
+    "high": "Alto",
+    "critical": "Crítico",
+    "fixed": "Corrigido",
+    "accepted": "Risco aceito",
+    "mitigated": "Mitigado"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "title": "Cortex",
+  "subtitle": "Enriquecimento de observáveis — transformando um IP puro num score de reputação.",
+  "intro": [
+    { "type": "p", "text": "O Cortex fica ao lado do TheHive e faz um trabalho: dado um observável (um IP, um hash, um domínio, uma URL) anexado a um caso, rodar ele através de um ou mais \"analisadores\" — pequenos workers que consultam uma fonte de inteligência externa ou local e retornam um veredito estruturado." },
+    { "type": "p", "text": "Dois analisadores estão conectados neste laboratório: AbuseIPDB (reputação de IP) e VirusTotal_GetReport (reputação multi-engine pra IPs, hashes, domínios e URLs) — os dois serviços de camada gratuita, ambos exigindo sua própria API key de uma conta pessoal." }
+  ],
+  "sections": [
+    {
+      "id": "enabling-analyzers",
+      "title": "Fazendo um analisador realmente rodar",
+      "blocks": [
+        { "type": "p", "text": "Isso não é um passo único, e a interface não deixa isso óbvio." },
+        { "type": "ol", "items": [
+          "Habilitar o catálogo completo de analisadores primeiro: o application.conf do Cortex precisa de uma entrada analyzer.urls apontando pro manifesto oficial (https://download.thehive-project.org/analyzers.json), mais job.runners configurado pra permitir o runner Docker — sem isso, a lista de analisadores fica vazia.",
+          "Configurar as credenciais: Organization → Analyzers Config → achar o bloco do analisador (AbuseIPDB, VirusTotal) → Edit → colar a API key. Isso sozinho não habilita o analisador.",
+          "Realmente habilitar: Organization → Analyzers (uma aba separada da Config) → buscar a entrada versionada específica (AbuseIPDB_2_0, VirusTotal_GetReport_3_1) num catálogo de 277 entradas → clicar \"+ Enable\". Só depois disso ele aparece como opção selecionável em New Analysis."
+        ]},
+        { "type": "callout", "variant": "warning", "text": "Preencher uma API key e nunca clicar em \"+ Enable\" é uma falha completamente silenciosa — o analisador simplesmente nunca aparece como opção, sem nenhuma mensagem de erro apontando o motivo." }
+      ]
+    },
+    {
+      "id": "docker-in-docker",
+      "title": "A saga de debug do Docker-em-Docker",
+      "blocks": [
+        { "type": "p", "text": "Os dois analisadores estavam corretamente configurados e habilitados, e toda tentativa de teste ainda falhava com exatamente o mesmo sintoma: um erro de decodificação JSON vazio, `input: null`. Nenhum container de analisador jamais aparecia em `docker ps -a` — significando que a falha acontecia antes mesmo do Cortex pedir pro Docker rodar qualquer coisa." },
+        { "type": "h3", "text": "Causa raiz: o Cortex monta o socket Docker real do host" },
+        { "type": "p", "text": "O Cortex roda o job runner \"docker\" pedindo pro próprio dockerd do host (via o /var/run/docker.sock montado) criar um container irmão de analisador — não um daemon Docker aninhado dentro do próprio container dele. Isso significa que qualquer caminho que o Cortex mande o Docker montar em bind precisa ser um caminho que existe no host de verdade, idêntico dos dois lados. Um caminho de diretório de trabalho de job que só existe dentro do sistema de arquivos do próprio container do Cortex não tem sentido nenhum pro daemon Docker do host." },
+        { "type": "h3", "text": "Correção, tentativa 1: montar em bind o mesmo caminho dos dois lados" },
+        { "type": "code", "code": "volumes:\n  - /home/thehive/thehive-stack/cortex-jobs:/home/thehive/thehive-stack/cortex-jobs" },
+        { "type": "p", "text": "Ainda falhou — mesmo sintoma, texto de erro ligeiramente diferente (agora só o caminho bruto do diretório de job, sem traceback)." },
+        { "type": "h3", "text": "Correção, tentativa 2: a chave de config estava silenciosamente errada" },
+        { "type": "p", "text": "Ler o próprio reference.conf embutido do Cortex dentro da imagem (em vez de chutar) revelou dois erros reais:" },
+        { "type": "ul", "items": [
+          "A chave certa é `job.runners` (plural). `job.runner` — o primeiro palpite, bem razoável — é uma chave que simplesmente não existe, e o HOCON ignora silenciosamente chaves desconhecidas em vez de dar erro. Não teve efeito nenhum o tempo todo.",
+          "Uma chave separada, `job.dockerDirectory`, distinta de `job.directory`, é o que realmente controla o caminho de montagem em bind do lado do host usado pros containers de analisador criados."
+        ]},
+        { "type": "code", "lang": "hocon", "code": "job {\n  runners = [docker]\n  directory = \"/home/thehive/thehive-stack/cortex-jobs\"\n  dockerDirectory = \"/home/thehive/thehive-stack/cortex-jobs\"\n}" },
+        { "type": "p", "text": "Corrigido, reiniciado — a mesma falha de novo. Mais perto, mas ainda não resolvido." },
+        { "type": "h3", "text": "A causa raiz de verdade: uma incompatibilidade de UID" },
+        { "type": "p", "text": "Inspecionar o processo Java real rodando dentro do container do Cortex (não o shell usado pra dar `docker exec`, que por padrão usa root e esconde problemas de permissão) mostrou que ele rodava como UID 1001. A pasta compartilhada do host, criada à mão via SSH, pertencia ao UID 1000 sem permissão de escrita pra \"outros\"." },
+        { "type": "code", "code": "chmod 777 ~/thehive-stack/cortex-jobs" },
+        { "type": "callout", "variant": "tip", "title": "Validado de ponta a ponta", "text": "Os dois analisadores rodaram com sucesso contra um IP de teste ao vivo (8.8.8.8) imediatamente depois dessa correção: o AbuseIPDB retornou um score de confiança de abuso de 0/100 (corretamente na whitelist, o DNS público do Google), e o VirusTotal retornou um relatório completo multi-engine — 0 de 91 engines marcaram como malicioso, mais dados de WHOIS, certificado TLS, e fingerprint JARM." },
+        { "type": "callout", "variant": "info", "title": "Por que isso vale a pena documentar em detalhe", "text": "Nenhum desses quatro problemas produziu uma mensagem de erro genuinamente clara. Diagnosticar isso exigiu ler payloads de erro JSON brutos, inspecionar /proc/<pid>/status dentro de um container pra achar o UID real de execução, e ler o próprio arquivo de config de referência do fornecedor em vez da documentação pública (incompleta) — o tipo de debug em camadas que é bem mais representativo de trabalho operacional real do que um guia de instalação limpo seria." }
+      ]
+    }
+  ]
+}

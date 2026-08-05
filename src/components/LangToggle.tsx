@@ -2,6 +2,12 @@ import { useTranslation } from 'react-i18next'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { setLang, type Lang } from '../store/uiSlice'
 
+const langs: { code: Lang; label: string }[] = [
+  { code: 'en', label: 'EN' },
+  { code: 'fr', label: 'FR' },
+  { code: 'pt', label: 'PT' },
+]
+
 export default function LangToggle() {
   const { t } = useTranslation('common')
   const lang = useAppSelector((s) => s.ui.lang)
@@ -16,18 +22,16 @@ export default function LangToggle() {
       title={t('actions.toggleLanguage')}
       className="flex h-9 items-center rounded-lg border border-border bg-bg-elevated p-0.5 text-xs font-semibold"
     >
-      <button
-        onClick={() => pick('en')}
-        className={`rounded-md px-2 py-1.5 transition ${lang === 'en' ? 'bg-accent text-bg' : 'text-fg-muted hover:text-fg'}`}
-      >
-        EN
-      </button>
-      <button
-        onClick={() => pick('fr')}
-        className={`rounded-md px-2 py-1.5 transition ${lang === 'fr' ? 'bg-accent text-bg' : 'text-fg-muted hover:text-fg'}`}
-      >
-        FR
-      </button>
+      {langs.map(({ code, label }) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => pick(code)}
+          className={`rounded-md px-2 py-1.5 transition ${lang === code ? 'bg-accent text-bg' : 'text-fg-muted hover:text-fg'}`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }

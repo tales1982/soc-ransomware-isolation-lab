@@ -26,6 +26,18 @@ import frCve from './locales/fr/cve.json'
 import frExercises from './locales/fr/exercises.json'
 import frAbout from './locales/fr/about.json'
 
+import ptCommon from './locales/pt/common.json'
+import ptHome from './locales/pt/home.json'
+import ptInstall from './locales/pt/install.json'
+import ptTech from './locales/pt/tech.json'
+import ptWazuh from './locales/pt/wazuh.json'
+import ptThehive from './locales/pt/thehive.json'
+import ptCortex from './locales/pt/cortex.json'
+import ptAutomation from './locales/pt/automation.json'
+import ptCve from './locales/pt/cve.json'
+import ptExercises from './locales/pt/exercises.json'
+import ptAbout from './locales/pt/about.json'
+
 export const defaultNS = 'common'
 
 i18n
@@ -60,6 +72,19 @@ i18n
         cve: frCve,
         exercises: frExercises,
         about: frAbout,
+      },
+      pt: {
+        common: ptCommon,
+        home: ptHome,
+        install: ptInstall,
+        tech: ptTech,
+        wazuh: ptWazuh,
+        thehive: ptThehive,
+        cortex: ptCortex,
+        automation: ptAutomation,
+        cve: ptCve,
+        exercises: ptExercises,
+        about: ptAbout,
       },
     },
     fallbackLng: 'en',

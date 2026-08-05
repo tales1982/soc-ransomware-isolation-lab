@@ -1,0 +1,100 @@
+{
+  "title": "Instalação & Arquitetura",
+  "subtitle": "Como um notebook reaproveitado virou um SIEM, e a ordem em que tudo foi construído.",
+  "hardware": {
+    "title": "A limitação de hardware que moldou tudo",
+    "intro": "O servidor SIEM (\"soc-server\") é um notebook Toshiba Satellite C670D-12Q — nada perto do que um SIEM de produção rodaria. Essa limitação é proposital: ela força cada achado de performance e confiabilidade deste site a ser real, não teórico.",
+    "specs": [
+      { "label": "CPU", "value": "2 núcleos, x86-64 — o maior gargalo de todo o laboratório" },
+      { "label": "RAM", "value": "~8 GB" },
+      { "label": "Armazenamento", "value": "~1 TB de HD mecânico (HGST), não SSD" },
+      { "label": "Rede", "value": "Ethernet Realtek, BIOS Legacy (sem UEFI)" },
+      { "label": "Método de boot", "value": "Instalação via PXE/netboot — o hardware não consegue bootar de USB ou DVD de jeito nenhum" }
+    ],
+    "partitioning": {
+      "title": "Layout do disco (LVM)",
+      "items": [
+        "/boot — 2 GB",
+        "/ — 100 GB",
+        "/var — 700 GB, dedicado ao armazenamento de índices e logs do SIEM",
+        "/home — 100 GB"
+      ]
+    }
+  },
+  "network": {
+    "title": "Rede",
+    "items": [
+      "LAN doméstica, 192.168.178.0/24, atrás de um roteador FRITZ!Box 7530 AX",
+      "soc-server tem uma reserva DHCP permanente",
+      "Firewall UFW em todo host Linux/servidor: negação padrão de entrada, SSH só na LAN, portas do Wazuh (443/1514/1515/55000) restritas à sub-rede local"
+    ]
+  },
+  "architecture": {
+    "title": "As 9 máquinas",
+    "intro": "Uma mistura de hardware físico e VMs VirtualBox, cobrindo deliberadamente três sistemas operacionais e incluindo tanto uma máquina em papel de \"atacante\" quanto uma adição em macOS fora do escopo original — pra demonstrar consciência das lacunas de cobertura em vez de escondê-las.",
+    "table": {
+      "headers": ["Máquina", "SO", "Papel"],
+      "rows": [
+        ["soc-server", "Ubuntu Server 24.04.4 LTS (física)", "Manager + indexador + dashboard do Wazuh, Suricata, automação Python, nó de controle Ansible"],
+        ["victim-linux", "Ubuntu 26.04", "Nó de armazenamento de mídia simulado: compartilhamentos Samba (ingest/live/archive/backup/quarantine), FIM + auditd, alvo da Resposta Ativa"],
+        ["tales-desktop", "Ubuntu 24.04.4 (física)", "Endpoint, auditd, sensor Suricata — alvo principal da campanha de triagem de CVEs"],
+        ["kali-vm", "Kali Linux (VM)", "Endpoint / máquina em papel de atacante, auditd, sensor Suricata"],
+        ["kali-msi-laptop", "Kali GNU/Linux (física)", "Endpoint / máquina em papel de atacante, auditd, sensor Suricata"],
+        ["win10-vm", "Windows 10 Pro (VM)", "Endpoint, Sysmon, sensor Suricata"],
+        ["win-server-vm", "Windows Server 2019 (VM)", "Endpoint, Sysmon, sensor Suricata, Active Directory"],
+        ["mac-laptop", "macOS (física)", "Endpoint (FIM só agendado), Suricata via Homebrew"],
+        ["thehive-vm", "Ubuntu Server 24.04.4 LTS (VM, 8GB/4vCPU/80GB)", "TheHive 5.2 + Cortex 3.1.8 + Cassandra + Elasticsearch via Docker Compose"]
+      ]
+    }
+  },
+  "order": {
+    "title": "Integrando uma máquina nova: a checklist realmente usada",
+    "intro": "Toda máquina do laboratório segue a mesma sequência, documentada uma vez e reutilizada em vez de redescoberta a cada vez.",
+    "steps": [
+      {
+        "title": "1. Conectar ao Wazuh",
+        "text": "Configurar a rede (modo Bridged pra VMs, nunca NAT — senão a máquina nunca cai na sub-rede LAN real), testar conectividade com o manager nas portas 1514/1515, checar se sobrou algum registro de agente de uma imagem anterior (isso sozinho já causou retrabalho em quase toda VM reaproveitada), depois rodar o comando de instalação gerado pelo dashboard. Só seguir em frente quando o agente aparecer como Active."
+      },
+      {
+        "title": "2A. Windows → Sysmon",
+        "text": "Checar instalação preexistente, baixar só da fonte oficial da Microsoft Sysinternals, instalar com uma config da comunidade mapeada pro MITRE ATT&CK (SwiftOnSecurity/olafhartong) em vez da config padrão, bem enxuta, conectar os canais Sysmon + PowerShell-Operational no ossec.conf do agente Wazuh, validar no dashboard."
+      },
+      {
+        "title": "2B. Linux → auditd",
+        "text": "Instalar, criar regras de vigilância de identidade/privilégio/SSH, testar com ausearch, ativar FIM em tempo real. Uma pegadinha real: o primeiro touch num arquivo monitorado antes do FIM em tempo real estar realmente ativado só vira parte da linha de base — não dispara alerta. É preciso tocar o arquivo de novo depois do restart do agente pra ver a detecção de verdade."
+      },
+      {
+        "title": "2C. macOS",
+        "text": "Não existe ferramental dedicado aqui — uma lacuna documentada de propósito. macOS não tem auditd nem Sysmon, então só o FIM nativo do agente Wazuh está disponível, e ele silenciosamente cai pra varredura agendada em algumas pastas, com atrasos de detecção de várias horas, sem explicação."
+      },
+      {
+        "title": "3. Registrar",
+        "text": "Uma linha no build log normalmente basta (nome, tipo, SO, data). Uma descrição completa só se justifica quando um erro genuinamente novo é encontrado — não já coberto por um guia existente."
+      },
+      {
+        "title": "4. (Condicional) Remover um agente obsoleto",
+        "text": "Usado ao reinstalar na mesma máquina (o registro antigo do lado do manager precisa ser removido primeiro, senão a nova instalação falha com \"Agent key already in use\") ou ao aposentar uma máquina definitivamente."
+      }
+    ]
+  },
+  "phases": {
+    "title": "O plano de construção em 17 fases",
+    "intro": "16 das 17 fases planejadas foram concluídas (a Fase 16 — mídia de backup física — foi explicitamente pulada por falta de hardware externo, e documentada como tal em vez de silenciosamente descartada). O plano em si começou como um exercício de rastreabilidade requisito por requisito — cada capacidade citada na vaga alvo (correlação de logs, monitoramento equivalente a EDR, uma camada de resposta estilo SOAR, automação Python, APIs de equipamento de rede) foi mapeada pra uma fase específica antes de qualquer instalação começar, e as fases 10–14 existem especificamente pra cobrir requisitos que ainda não tinham equivalente. A seguir está a linha do tempo condensada; a narrativa completa — com cada bug — vive nas páginas de Tecnologias.",
+    "items": [
+      { "phase": "3", "title": "Instalação do manager Wazuh", "note": "Dois bugs reais: um timeout de systemd na máquina de 2 núcleos, e um bug conhecido em credenciais de API" },
+      { "phase": "4", "title": "Primeiro endpoint Windows", "note": "O Windows Installer silenciosamente manteve uma versão antiga do agente — 4.12.0 em vez do 4.14.7 recém-instalado" },
+      { "phase": "5", "title": "Segundo endpoint Linux (Kali)", "note": "Bug de perfil de bridge no NetworkManager — link ativo, sem IP, não sobrevivia a reboot" },
+      { "phase": "6", "title": "Servidor de armazenamento de mídia", "note": "Compartilhamentos Samba, FIM, o primeiro teste de renomeação simulando comportamento de ransomware" },
+      { "phase": "7", "title": "IDS Suricata — sensor único", "note": "Depois descoberto ter uma lacuna arquitetural real (ver Wazuh → Segurança de Rede)" },
+      { "phase": "8", "title": "Motor de automação Python", "note": "Relatório de incidente, isolamento, failover, alerta forense, medição de latência" },
+      { "phase": "9", "title": "Orquestração Ansible", "note": "Condição de corrida na passphrase da chave SSH entre hosts paralelos" },
+      { "phase": "10", "title": "Topologia de rede virtual (containerlab)", "note": "NETCONF trocado por docker exec + iptables quando a imagem do roteador não expunha nem SSH nem NETCONF" },
+      { "phase": "11", "title": "Conexão da Resposta Ativa", "note": "Caça a um deadlock de vários dias — uma chamada stdin.read() bloqueada pra sempre no pipe de resposta do Wazuh, mantido aberto indefinidamente" },
+      { "phase": "12", "title": "Simulação de failover", "note": "Substituição por um worker limpo pra que a \"transmissão\" nunca caia completamente" },
+      { "phase": "13", "title": "Alerta forense", "note": "Um bloco `if __name__ == \"__main__\":` perdido durante uma edição no nano produziu um script silenciosamente inoperante" },
+      { "phase": "14", "title": "Medição de latência", "note": "Primeira tentativa (18.05s) foi inválida — media o tempo de reação humana, não o pipeline" },
+      { "phase": "15", "title": "Simulação de ransomware em escala", "note": "O bug de colisão de ID de incidente — o achado mais significativo de todo o projeto" },
+      { "phase": "17", "title": "Montagem do portfólio", "note": "Seguida de uma fase bônus extensa: gestão de CVEs, rollout de Suricata em 8 sensores, TheHive + Cortex" }
+    ]
+  }
+}

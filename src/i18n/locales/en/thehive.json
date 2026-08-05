@@ -61,6 +61,29 @@
         ]},
         { "type": "callout", "variant": "info", "title": "Validation", "text": "A manual test alert returned HTTP 201 — and within minutes, real Wazuh alerts (a \"Listened ports status changed\" event and a rootcheck anomaly) appeared in TheHive's queue with zero further manual action, confirming the integratord daemon was calling the script correctly in production, not just in the manual test." }
       ]
+    },
+    {
+      "id": "reading-real-alert",
+      "title": "Reading a real alert end to end — worked example",
+      "blocks": [
+        { "type": "p", "text": "A genuine alert that arrived automatically through the integration above, exactly as it appears in TheHive's General tab — not a constructed example. This is the same 5-question triage flow used on the Wazuh page, walked through on a live case." },
+        { "type": "code", "lang": "json", "code": "{\n  \"timestamp\": \"2026-08-05T07:13:50.366+0200\",\n  \"rule\": {\n    \"level\": 7,\n    \"description\": \"Integrity checksum changed.\",\n    \"id\": \"550\",\n    \"mitre\": { \"id\": [\"T1565.001\"], \"tactic\": [\"Impact\"], \"technique\": [\"Stored Data Manipulation\"] },\n    \"firedtimes\": 24,\n    \"groups\": [\"ossec\", \"syscheck\", \"syscheck_entry_modified\", \"syscheck_file\"]\n  },\n  \"agent\": { \"id\": \"005\", \"name\": \"tales-desktop\", \"ip\": \"192.168.178.92\" },\n  \"manager\": { \"name\": \"soc-server\" },\n  \"full_log\": \"File '/etc/cups/subscriptions.conf.O' modified\\nMode: realtime\\nChanged attributes: size,inode,mtime,md5,sha1,sha256\\nSize changed from '397' to '699'\\nOld md5sum was: '6ae849634dec4fa5803ae7d8d23fa4da'\\nNew md5sum is : 'c78975ea11f60fee3c7252e019985309'\",\n  \"syscheck\": {\n    \"path\": \"/etc/cups/subscriptions.conf.O\",\n    \"mode\": \"realtime\",\n    \"uid_after\": \"0\",\n    \"gid_after\": \"7\",\n    \"uname_after\": \"root\",\n    \"gname_after\": \"lp\",\n    \"changed_attributes\": [\"size\", \"inode\", \"mtime\", \"md5\", \"sha1\", \"sha256\"],\n    \"event\": \"modified\"\n  },\n  \"decoder\": { \"name\": \"syscheck_integrity_changed\" },\n  \"location\": \"syscheck\"\n}" },
+        { "type": "h3", "text": "1 — Recognize" },
+        { "type": "p", "text": "rule.id 550, level 7 — a generic Wazuh FIM \"content modified\" alert, not the lab's own critical rule 100200 (level 12, scoped to /srv/media). The rule.mitre.id T1565.001 (\"Stored Data Manipulation\") is Wazuh's default, generic mapping for any file content change — it categorizes the technique, it does not by itself mean anything malicious happened." },
+        { "type": "h3", "text": "2 — Contextualize" },
+        { "type": "p", "text": "syscheck.path is /etc/cups/subscriptions.conf.O — CUPS, the Linux printing subsystem, rewriting its own subscription state file. Ownership after the change: uname_after root, gname_after lp (\"line printer\" group) — exactly consistent with the printing service editing its own configuration. Critically, this path is not under /srv/media (the protected asset) and not a security-sensitive file like /etc/passwd or /etc/sudoers." },
+        { "type": "h3", "text": "3 — Correlate" },
+        { "type": "p", "text": "rule.firedtimes: 24 — this exact rule has already fired 24 times for this kind of event on this agent. A high firedtimes count on a low-severity rule is itself a correlation signal: it points to a recurring, established background pattern rather than a one-off, novel event worth escalating." },
+        { "type": "h3", "text": "4 — Decide" },
+        { "type": "p", "text": "Everything points the same direction — file path, ownership, recurrence — so the reasonable call is: expected system behavior, not a security event. Close it, don't promote it to a case." },
+        { "type": "h3", "text": "5 — Document and resolve" },
+        { "type": "p", "text": "Two concrete actions in TheHive, depending on what the alert turns out to be:" },
+        { "type": "ul", "items": [
+          "If it's confirmed benign (this case): close the alert directly from the alert list — no case needed. Since this exact pattern already has firedtimes: 24, it's a strong candidate for a tuning rule back on Wazuh, the same pattern already used for rule 100101 (which downgrades Suricata's \"Ethertype unknown\" noise): add a local_rules.xml rule that lowers the severity of syscheck changes specifically under /etc/cups/, so this stops reaching TheHive's queue at all while paths that actually matter stay untouched.",
+          "If instead the context pointed the other way — an unfamiliar path, unexpected ownership, no prior firedtimes history — the same alert would be promoted straight into a case using the Ransomware / FIM Critical Alert template from the section above, and worked through its 8-task checklist."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "The other tabs on an alert", "text": "Observables, TTPs, Similar Cases and Similar Alerts exist for exactly this kind of decision: Similar Alerts would show every prior firedtimes:24 occurrence at a glance, without needing to go back to Wazuh's own Discover screen to reconstruct the history manually." }
+      ]
     }
   ]
 }
