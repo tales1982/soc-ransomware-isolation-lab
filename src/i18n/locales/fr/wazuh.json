@@ -231,6 +231,35 @@
       ]
     },
     {
+      "id": "reading-real-network-alert",
+      "title": "Lire une vraie alerte réseau — traquer un scan nmap parmi 900 champs",
+      "blocks": [
+        { "type": "p", "text": "Une investigation en direct de ce labo : un scan nmap -A lancé depuis kali-vm contre victim-linux, puis traqué manuellement dans Discover au milieu d'un flot de bruit de fond de niveau 3. Déroulé du début à la fin, exactement comme ça s'est passé — y compris le mauvais document trouvé en premier." },
+        { "type": "code", "lang": "bash", "code": "nmap -A 192.168.178.177\n# Nmap scan report for victim-linux.fritz.box (192.168.178.177)\n# 22/tcp  open  ssh          OpenSSH 10.2p1 Ubuntu\n# 139/tcp open  netbios-ssn  Samba smbd 4\n# 445/tcp open  netbios-ssn  Samba smbd 4\n# Started 2026-08-05 02:22 -0400, finished ~02:23 (59.81s)" },
+        { "type": "h3", "text": "Première lecture : le leurre — agent.name n'est ni l'attaquant ni la victime" },
+        { "type": "p", "text": "Filtrer la table Discover sur rule.id:86601 a d'abord fait remonter ce document, étiqueté agent.name: kali-vm — facile à mal lire comme \"l'alerte de la machine attaquante elle-même\"." },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"LOCAL Possible TCP Port Scan Detected\", \"signature_id\": 9000001, \"category\": \"Attempted Information Leak\", \"severity\": 2 },\n    \"src_ip\": \"192.168.178.92\", \"src_port\": 33200,\n    \"dest_ip\": \"192.168.178.10\", \"dest_port\": 443,\n    \"flow\": { \"pkts_toserver\": 1, \"bytes_toserver\": 74, \"pkts_toclient\": 0, \"bytes_toclient\": 0 }\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 139 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "callout", "variant": "warning", "title": "L'indice : agent.ip ne correspond ni à src_ip ni à dest_ip", "text": "L'IP réelle de kali-vm est 192.168.178.156 — mais ce flux va de 192.168.178.92 vers 192.168.178.10:443, aucun des deux n'étant kali-vm. La sonde kali-vm a simplement observé un trafic sans rapport entre deux autres hôtes et l'a rapporté. agent.name/agent.ip indique quelle sonde a détecté l'événement, jamais qui était l'attaquant ou la victime — ça, c'est uniquement dans data.src_ip et data.dest_ip." },
+        { "type": "h3", "text": "Trouver le vrai" },
+        { "type": "ol", "items": [
+          "Convertir l'horodatage du scan vers le fuseau horaire du dashboard. nmap a enregistré 02:22 -0400 ; comparer le data.timestamp brut à l'horodatage affiché par le dashboard sur d'autres alertes a montré un décalage de +2h — donc la fenêtre du scan à l'écran est approximativement 08:22–08:24.",
+          "Filtrer par les vraies IP, pas par agent.name : data.src_ip:\"192.168.178.156\" and data.dest_ip:\"192.168.178.177\".",
+          "Ajouter data.src_ip, data.dest_ip et data.alert.signature comme colonnes de la table au lieu d'ouvrir chaque document à la main."
+        ]},
+        { "type": "p", "text": "Ce filtre a fait remonter ce document — flow.start à 02:23:11 -0400, en plein dans la fenêtre du scan, avec agent.ip qui correspond cette fois vraiment à data.src_ip :" },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"SURICATA SMB malformed request dialects\", \"signature_id\": 2225005, \"category\": \"Generic Protocol Command Decode\", \"severity\": 3 },\n    \"app_proto\": \"smb\",\n    \"src_ip\": \"192.168.178.156\", \"src_port\": 34606,\n    \"dest_ip\": \"192.168.178.177\", \"dest_port\": 445,\n    \"smb\": { \"command\": \"SMB1_COMMAND_NEGOTIATE_PROTOCOL\", \"client_dialects\": \"NT LM 0.12, \", \"dialect\": \"unknown\" },\n    \"flow\": { \"start\": \"2026-08-05T02:23:11.535338-0400\", \"pkts_toserver\": 4, \"bytes_toserver\": 325, \"pkts_toclient\": 3, \"bytes_toclient\": 247 },\n    \"flow_id\": \"2017785197271292.000000\"\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 128 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "h3", "text": "Le flux de triage en 5 questions, appliqué" },
+        { "type": "ol", "items": [
+          "Reconnaître — data.src_ip 192.168.178.156 → data.dest_ip 192.168.178.177 sur le port 445 (SMB), correspondant à l'un des trois ports que nmap a signalés ouverts. data.smb.command montre SMB1_COMMAND_NEGOTIATE_PROTOCOL avec client_dialects \"NT LM 0.12\" — la sonde de fingerprinting de service -sV/-A de nmap, pas un vrai client Windows, ce qui explique exactement pourquoi le parser SMB strict de Suricata le signale comme \"malformed\".",
+          "Contextualiser — flow.start (02:23:11 -0400) tombe exactement dans la fenêtre d'exécution du scan (02:22–02:23, 59,81s). agent.ip (156) correspond maintenant à data.src_ip, confirmant que cette sonde rapporte son propre trafic sortant, contrairement au leurre ci-dessus.",
+          "Corréler — rule.firedtimes: 128 sur le même rule.id (86601) que le leurre montre que cette règle de décodeur Suricata générique se déclenche constamment sur tout le réseau pour de nombreuses raisons sans rapport ; c'est le signature_id (2225005 ici contre 9000001 pour le leurre) qui les distingue vraiment, pas rule.id.",
+          "Décider — confirmé comme du vrai trafic d'attaquant, correctement attribué au scan. Mais ça n'a atteint que le rule.level 3 — la même sévérité que le bruit de fond de routine.",
+          "Documenter — c'est un vrai écart de réglage qui mérite d'être noté : une sonde active de fingerprinting de service depuis un hôte offensif connu a atteint exactement la même sévérité que le trafic Spotify. Une correction candidate serait une règle local_rules.xml qui escalade signature_id 2225005 quand data.src_ip correspond à un hôte Kali/pentest connu."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Confirmer un doublon entre sondes", "text": "victim-linux et tales-desktop montraient des signatures d'apparence identique (\"malformed SMB\" et \"port scan\") à la même seconde dans la liste brute des alertes. Pour distinguer un vrai doublon du même événement vu par deux sondes (le scénario de l'exercice B-6) d'un trafic sans rapport arrivé par coïncidence, comparez data.flow_id entre les documents — un flow_id identique signifie la même conversation réseau vue depuis deux points d'observation ; un flow_id différent signifie un trafic sans rapport tombé par hasard à la même seconde." }
+      ]
+    },
+    {
       "id": "installer-bugs",
       "title": "Réussir à installer Wazuh tout court : deux vrais bugs",
       "blocks": [

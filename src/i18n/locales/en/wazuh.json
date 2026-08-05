@@ -231,6 +231,35 @@
       ]
     },
     {
+      "id": "reading-real-network-alert",
+      "title": "Reading a real network alert — hunting an nmap scan across 900 fields",
+      "blocks": [
+        { "type": "p", "text": "A live investigation from this lab: an nmap -A scan launched from kali-vm against victim-linux, then hunted down manually in Discover among a flood of level-3 background noise. Worked start to finish, exactly as it happened — including the wrong document picked up first." },
+        { "type": "code", "lang": "bash", "code": "nmap -A 192.168.178.177\n# Nmap scan report for victim-linux.fritz.box (192.168.178.177)\n# 22/tcp  open  ssh          OpenSSH 10.2p1 Ubuntu\n# 139/tcp open  netbios-ssn  Samba smbd 4\n# 445/tcp open  netbios-ssn  Samba smbd 4\n# Started 2026-08-05 02:22 -0400, finished ~02:23 (59.81s)" },
+        { "type": "h3", "text": "First read: the decoy — agent.name is not the same as attacker or victim" },
+        { "type": "p", "text": "Filtering the Discover table by rule.id:86601 first surfaced this document, tagged agent.name: kali-vm — easy to misread as \"the attacking machine's own alert.\"" },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"LOCAL Possible TCP Port Scan Detected\", \"signature_id\": 9000001, \"category\": \"Attempted Information Leak\", \"severity\": 2 },\n    \"src_ip\": \"192.168.178.92\", \"src_port\": 33200,\n    \"dest_ip\": \"192.168.178.10\", \"dest_port\": 443,\n    \"flow\": { \"pkts_toserver\": 1, \"bytes_toserver\": 74, \"pkts_toclient\": 0, \"bytes_toclient\": 0 }\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 139 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "callout", "variant": "warning", "title": "The tell: agent.ip matches neither src_ip nor dest_ip", "text": "kali-vm's real IP is 192.168.178.156 — but this flow runs 192.168.178.92 → 192.168.178.10:443, neither of which is kali-vm. The kali-vm sensor simply observed unrelated traffic between two other hosts and reported it. agent.name/agent.ip tells you which sensor detected the event, never who was attacker or victim — that's only in data.src_ip and data.dest_ip." },
+        { "type": "h3", "text": "Finding the real one" },
+        { "type": "ol", "items": [
+          "Convert the scan's timestamp to the dashboard's timezone. nmap logged 02:22 -0400; comparing raw data.timestamp against the dashboard's displayed timestamp on other alerts showed a +2h offset — so the scan window on screen is roughly 08:22–08:24.",
+          "Filter by the real IPs, not agent.name: data.src_ip:\"192.168.178.156\" and data.dest_ip:\"192.168.178.177\".",
+          "Add data.src_ip, data.dest_ip and data.alert.signature as table columns instead of opening every document by hand."
+        ]},
+        { "type": "p", "text": "That filter surfaced this document — flow.start 02:23:11 -0400, squarely inside the scan window, with agent.ip now actually matching data.src_ip:" },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"SURICATA SMB malformed request dialects\", \"signature_id\": 2225005, \"category\": \"Generic Protocol Command Decode\", \"severity\": 3 },\n    \"app_proto\": \"smb\",\n    \"src_ip\": \"192.168.178.156\", \"src_port\": 34606,\n    \"dest_ip\": \"192.168.178.177\", \"dest_port\": 445,\n    \"smb\": { \"command\": \"SMB1_COMMAND_NEGOTIATE_PROTOCOL\", \"client_dialects\": \"NT LM 0.12, \", \"dialect\": \"unknown\" },\n    \"flow\": { \"start\": \"2026-08-05T02:23:11.535338-0400\", \"pkts_toserver\": 4, \"bytes_toserver\": 325, \"pkts_toclient\": 3, \"bytes_toclient\": 247 },\n    \"flow_id\": \"2017785197271292.000000\"\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 128 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "h3", "text": "The 5-question triage flow, applied" },
+        { "type": "ol", "items": [
+          "Recognize — data.src_ip 192.168.178.156 → data.dest_ip 192.168.178.177 on port 445 (SMB), matching one of the three ports nmap reported open. data.smb.command shows SMB1_COMMAND_NEGOTIATE_PROTOCOL with client_dialects \"NT LM 0.12\" — nmap's -sV/-A service-fingerprinting probe, not a real Windows client, which is exactly why Suricata's strict SMB parser flags it as \"malformed.\"",
+          "Contextualize — flow.start (02:23:11 -0400) falls inside the scan's exact runtime window (02:22–02:23, 59.81s). agent.ip (156) now matches data.src_ip, confirming this sensor is reporting its own outbound traffic, unlike the decoy above.",
+          "Correlate — rule.firedtimes: 128 on the same rule.id (86601) as the decoy shows this generic Suricata decoder rule fires constantly across the whole network for many unrelated reasons; the signature_id (2225005 here vs. 9000001 for the decoy) is what actually distinguishes them, not rule.id.",
+          "Decide — confirmed as real attacker traffic, correctly attributed to the scan. But it only reached rule.level 3 — the same severity as routine background noise.",
+          "Document — this is a real tuning gap worth writing down: an active service-fingerprinting probe from a known offensive host reached the exact same severity as Spotify traffic. A candidate fix is a local_rules.xml rule that escalates signature_id 2225005 when data.src_ip matches a known Kali/pentest host."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Confirming a duplicate across sensors", "text": "victim-linux and tales-desktop showed the same-looking \"malformed SMB\" and \"port scan\" signatures within the same second in the raw alert list. To tell a genuine same-event, two-sensor duplicate (the exercise B-6 scenario) apart from unrelated coincidental traffic, compare data.flow_id across the documents — identical flow_id means the same network conversation seen from two vantage points; different flow_id means unrelated traffic that just happened to land in the same second." }
+      ]
+    },
+    {
       "id": "installer-bugs",
       "title": "Getting Wazuh installed at all: two real bugs",
       "blocks": [

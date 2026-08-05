@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import PageHeader from '../components/PageHeader'
 import ContentRenderer from '../components/ContentRenderer'
 import CodeBlock from '../components/CodeBlock'
+import ExerciseAnswer from '../components/ExerciseAnswer'
 import { useAppDispatch, useAppSelector } from '../hooks/redux'
 import { toggleExercise, resetProgress } from '../store/progressSlice'
 import type { ContentBlock } from '../types/content'
@@ -101,6 +102,7 @@ function ExerciseCard({ item }: { item: ExerciseItem }) {
               {showCode && <CodeBlock code={item.code} />}
             </div>
           )}
+          <ExerciseAnswer exerciseId={item.id} title={item.title} text={item.text} mitre={item.mitre} tools={item.tools} />
         </div>
       </div>
     </div>

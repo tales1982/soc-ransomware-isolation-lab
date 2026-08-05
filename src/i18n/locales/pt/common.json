@@ -51,5 +51,26 @@
     "fixed": "Corrigido",
     "accepted": "Risco aceito",
     "mitigated": "Mitigado"
+  },
+  "answer": {
+    "cta": "Responder este exercício (feedback de IA)",
+    "placeholder": "Digite sua resposta — o que você encontrou, quais comandos rodou, o que os campos significavam...",
+    "minChars": "{{count}} / {{min}} caracteres",
+    "submit": "Enviar pra feedback da IA",
+    "submitting": "Analisando sua resposta…",
+    "resubmit": "Editar e reenviar",
+    "feedbackTitle": "Feedback da IA",
+    "scoreLabels": {
+      "Excellent": "Excelente",
+      "Good": "Bom",
+      "Needs Work": "Precisa melhorar",
+      "Incomplete": "Incompleto"
+    },
+    "strengths": "O que você acertou",
+    "improvements": "O que melhorar",
+    "missedConcepts": "Conceitos que faltaram",
+    "summary": "Resumo",
+    "error": "Não deu pra obter feedback: {{message}}",
+    "apiKeyMissing": "O feedback de IA não está configurado neste deploy."
   }
 }

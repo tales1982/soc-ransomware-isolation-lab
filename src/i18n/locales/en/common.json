@@ -51,5 +51,26 @@
     "fixed": "Fixed",
     "accepted": "Risk accepted",
     "mitigated": "Mitigated"
+  },
+  "answer": {
+    "cta": "Answer this exercise (AI feedback)",
+    "placeholder": "Type your answer — what you found, what commands you ran, what the fields meant...",
+    "minChars": "{{count}} / {{min}} characters",
+    "submit": "Submit for AI feedback",
+    "submitting": "Analyzing your answer…",
+    "resubmit": "Edit and resubmit",
+    "feedbackTitle": "AI feedback",
+    "scoreLabels": {
+      "Excellent": "Excellent",
+      "Good": "Good",
+      "Needs Work": "Needs work",
+      "Incomplete": "Incomplete"
+    },
+    "strengths": "What you got right",
+    "improvements": "What to improve",
+    "missedConcepts": "Missed concepts",
+    "summary": "Summary",
+    "error": "Couldn't get feedback: {{message}}",
+    "apiKeyMissing": "AI feedback isn't configured on this deployment."
   }
 }

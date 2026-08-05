@@ -231,6 +231,35 @@
       ]
     },
     {
+      "id": "reading-real-network-alert",
+      "title": "Lendo um alerta de rede real — caçando um scan nmap em meio a 900 campos",
+      "blocks": [
+        { "type": "p", "text": "Uma investigação ao vivo deste laboratório: um scan nmap -A disparado do kali-vm contra o victim-linux, depois caçado manualmente no Discover em meio a uma enxurrada de ruído de fundo de nível 3. Resolvido do início ao fim, exatamente como aconteceu — incluindo o documento errado que apareceu primeiro." },
+        { "type": "code", "lang": "bash", "code": "nmap -A 192.168.178.177\n# Nmap scan report for victim-linux.fritz.box (192.168.178.177)\n# 22/tcp  open  ssh          OpenSSH 10.2p1 Ubuntu\n# 139/tcp open  netbios-ssn  Samba smbd 4\n# 445/tcp open  netbios-ssn  Samba smbd 4\n# Started 2026-08-05 02:22 -0400, finished ~02:23 (59.81s)" },
+        { "type": "h3", "text": "Primeira leitura: a isca — agent.name não é o mesmo que atacante ou vítima" },
+        { "type": "p", "text": "Filtrar a tabela do Discover por rule.id:86601 trouxe primeiro este documento, marcado com agent.name: kali-vm — fácil de interpretar errado como \"o próprio alerta da máquina atacante\"." },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"LOCAL Possible TCP Port Scan Detected\", \"signature_id\": 9000001, \"category\": \"Attempted Information Leak\", \"severity\": 2 },\n    \"src_ip\": \"192.168.178.92\", \"src_port\": 33200,\n    \"dest_ip\": \"192.168.178.10\", \"dest_port\": 443,\n    \"flow\": { \"pkts_toserver\": 1, \"bytes_toserver\": 74, \"pkts_toclient\": 0, \"bytes_toclient\": 0 }\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 139 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "callout", "variant": "warning", "title": "O sinal: agent.ip não bate nem com src_ip nem com dest_ip", "text": "O IP real do kali-vm é 192.168.178.156 — mas esse fluxo vai de 192.168.178.92 até 192.168.178.10:443, e nenhum dos dois é o kali-vm. O sensor do kali-vm simplesmente observou um tráfego sem relação entre duas outras máquinas e reportou. agent.name/agent.ip diz qual sensor detectou o evento, nunca quem foi atacante ou vítima — isso só está em data.src_ip e data.dest_ip." },
+        { "type": "h3", "text": "Encontrando o de verdade" },
+        { "type": "ol", "items": [
+          "Converter o timestamp do scan pro fuso do dashboard. O nmap registrou 02:22 -0400; comparando o data.timestamp bruto com o timestamp exibido pelo dashboard em outros alertas, deu um offset de +2h — então a janela do scan na tela é aproximadamente 08:22–08:24.",
+          "Filtrar pelos IPs reais, não por agent.name: data.src_ip:\"192.168.178.156\" and data.dest_ip:\"192.168.178.177\".",
+          "Adicionar data.src_ip, data.dest_ip e data.alert.signature como colunas da tabela em vez de abrir cada documento na mão."
+        ]},
+        { "type": "p", "text": "Esse filtro trouxe este documento — flow.start em 02:23:11 -0400, bem dentro da janela do scan, com agent.ip agora realmente batendo com data.src_ip:" },
+        { "type": "code", "lang": "json", "code": "{\n  \"agent\": { \"id\": \"003\", \"name\": \"kali-vm\", \"ip\": \"192.168.178.156\" },\n  \"data\": {\n    \"alert\": { \"signature\": \"SURICATA SMB malformed request dialects\", \"signature_id\": 2225005, \"category\": \"Generic Protocol Command Decode\", \"severity\": 3 },\n    \"app_proto\": \"smb\",\n    \"src_ip\": \"192.168.178.156\", \"src_port\": 34606,\n    \"dest_ip\": \"192.168.178.177\", \"dest_port\": 445,\n    \"smb\": { \"command\": \"SMB1_COMMAND_NEGOTIATE_PROTOCOL\", \"client_dialects\": \"NT LM 0.12, \", \"dialect\": \"unknown\" },\n    \"flow\": { \"start\": \"2026-08-05T02:23:11.535338-0400\", \"pkts_toserver\": 4, \"bytes_toserver\": 325, \"pkts_toclient\": 3, \"bytes_toclient\": 247 },\n    \"flow_id\": \"2017785197271292.000000\"\n  },\n  \"rule\": { \"id\": \"86601\", \"level\": 3, \"firedtimes\": 128 },\n  \"manager\": { \"name\": \"soc-server\" }\n}" },
+        { "type": "h3", "text": "O fluxo de triagem de 5 perguntas, aplicado" },
+        { "type": "ol", "items": [
+          "Reconhecer — data.src_ip 192.168.178.156 → data.dest_ip 192.168.178.177 na porta 445 (SMB), batendo com uma das três portas que o nmap reportou abertas. data.smb.command mostra SMB1_COMMAND_NEGOTIATE_PROTOCOL com client_dialects \"NT LM 0.12\" — a sonda de fingerprint de serviço -sV/-A do nmap, não um cliente Windows real, exatamente por isso o parser SMB estrito do Suricata marca como \"malformed\".",
+          "Contextualizar — flow.start (02:23:11 -0400) cai bem dentro da janela real de execução do scan (02:22–02:23, 59,81s). agent.ip (156) agora bate com data.src_ip, confirmando que esse sensor está reportando seu próprio tráfego de saída, diferente da isca anterior.",
+          "Correlacionar — rule.firedtimes: 128 na mesma rule.id (86601) da isca mostra que essa regra genérica de decoder do Suricata dispara o tempo todo em toda a rede por vários motivos sem relação; é o signature_id (2225005 aqui contra 9000001 na isca) que realmente distingue os dois, não a rule.id.",
+          "Decidir — confirmado como tráfego real de atacante, atribuído corretamente ao scan. Mas só chegou ao rule.level 3 — a mesma severidade do ruído de fundo de rotina.",
+          "Documentar — essa é uma lacuna real de ajuste que vale registrar: uma sonda ativa de fingerprint de serviço vinda de um host ofensivo conhecido chegou exatamente na mesma severidade do tráfego do Spotify. Uma correção candidata é uma regra no local_rules.xml que escala o signature_id 2225005 quando data.src_ip bate com um host Kali/pentest conhecido."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Confirmando uma duplicata entre sensores", "text": "victim-linux e tales-desktop mostraram assinaturas com aparência idêntica (\"malformed SMB\" e \"port scan\") no mesmo segundo na lista bruta de alertas. Pra distinguir uma duplicata real do mesmo evento visto por dois sensores (o cenário do exercício B-6) de um tráfego sem relação que caiu por coincidência no mesmo segundo, compare o data.flow_id entre os documentos — flow_id idêntico significa a mesma conversa de rede vista de dois pontos de observação; flow_id diferente significa tráfego sem relação que só caiu no mesmo segundo por acaso." }
+      ]
+    },
+    {
       "id": "installer-bugs",
       "title": "Conseguindo instalar o Wazuh: dois bugs reais",
       "blocks": [

@@ -51,5 +51,26 @@
     "fixed": "Corrigé",
     "accepted": "Risque accepté",
     "mitigated": "Atténué"
+  },
+  "answer": {
+    "cta": "Répondre à cet exercice (retour IA)",
+    "placeholder": "Tapez votre réponse — ce que vous avez trouvé, les commandes exécutées, ce que signifiaient les champs...",
+    "minChars": "{{count}} / {{min}} caractères",
+    "submit": "Soumettre pour un retour IA",
+    "submitting": "Analyse de votre réponse…",
+    "resubmit": "Modifier et resoumettre",
+    "feedbackTitle": "Retour de l'IA",
+    "scoreLabels": {
+      "Excellent": "Excellent",
+      "Good": "Bien",
+      "Needs Work": "À améliorer",
+      "Incomplete": "Incomplet"
+    },
+    "strengths": "Ce que vous avez bien fait",
+    "improvements": "Ce qu'il faut améliorer",
+    "missedConcepts": "Concepts manqués",
+    "summary": "Résumé",
+    "error": "Impossible d'obtenir un retour : {{message}}",
+    "apiKeyMissing": "Le retour IA n'est pas configuré sur ce déploiement."
   }
 }
