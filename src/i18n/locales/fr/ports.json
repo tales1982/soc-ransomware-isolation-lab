@@ -1,0 +1,102 @@
+{
+  "title": "Référence des ports",
+  "subtitle": "Les ports réseau les plus courants dans les rapports SOC — ce que fait chacun, et quand il mérite vraiment un second regard.",
+  "intro": [
+    { "type": "p", "text": "Une référence rapide à consulter pendant le triage d'une alerte, plutôt que de chercher à chaque fois quel service tourne sur quel port. Ceux marqués « vu dans le labo » sont réellement apparus dans un exercice ou une investigation de ce laboratoire — le reste est l'ensemble que tout analyste SOC finit par mémoriser à force de le voir." },
+    { "type": "callout", "variant": "tip", "title": "Comment utiliser ça dans Discover", "text": "N'importe quel port de cette liste peut être recherché directement dans Threat Hunting/Discover avec data.dest_port: 445 (ou le numéro voulu) — combinez avec agent.name ou data.src_ip pour restreindre le résultat." }
+  ],
+  "sections": [
+    {
+      "id": "web-remote",
+      "title": "Web et accès distant / administration",
+      "blocks": [
+        { "type": "h3", "text": "Web" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["80", "HTTP", "trafic web non chiffré"],
+          ["443", "HTTPS", "vu dans le labo — le port le plus courant de tous, tableau de bord Wazuh, appels vidéo, etc."],
+          ["8080 / 8443", "HTTP/HTTPS alternatif", "proxys, panneaux d'administration, applications web internes"]
+        ]},
+        { "type": "h3", "text": "Accès distant et administration" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["22", "SSH", "vu dans le labo — tests de scan et de force brute contre victim-linux"],
+          ["23", "Telnet", "connexion distante non chiffrée — le voir actif aujourd'hui est déjà un signal d'alerte"],
+          ["3389", "RDP", "Bureau à distance Windows — cible classique de force brute et de ransomware"],
+          ["5900", "VNC", "un autre protocole d'accès distant graphique"],
+          ["5985 / 5986", "WinRM", "gestion à distance de Windows (PowerShell remoting) — utilisé aussi bien par les administrateurs qu'en mouvement latéral"]
+        ]}
+      ]
+    },
+    {
+      "id": "files-mail-directory",
+      "title": "Fichiers, e-mail et annuaire / authentification",
+      "blocks": [
+        { "type": "h3", "text": "Fichiers et partage" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["445", "SMB", "vu dans le labo — apparu dans le scan de kali-vm contre victim-linux ; cible classique des vers/ransomwares (ex: WannaCry)"],
+          ["139", "NetBIOS Session", "l'« ancien » SMB, voyage généralement avec le 445"],
+          ["21", "FTP", "transfert de fichiers non chiffré"],
+          ["990", "FTPS", "FTP avec TLS"],
+          ["2049", "NFS", "partage de fichiers entre serveurs Linux/Unix"]
+        ]},
+        { "type": "h3", "text": "E-mail" },
+        { "type": "table", "headers": ["Port", "Service"], "rows": [
+          ["25", "SMTP (envoi)"],
+          ["587", "SMTP submission (envoi authentifié, avec TLS)"],
+          ["993", "IMAPS"],
+          ["995", "POP3S"],
+          ["143 / 110", "IMAP / POP3 non chiffrés"]
+        ]},
+        { "type": "h3", "text": "Annuaire et authentification" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["389", "LDAP", "requêtes d'annuaire (Active Directory)"],
+          ["636", "LDAPS", "LDAP avec TLS"],
+          ["88", "Kerberos", "authentification de domaine Windows — cible d'attaques comme le Kerberoasting"],
+          ["53", "DNS", "résolution de noms — aussi utilisé comme canal d'exfiltration de données (tunnel DNS)"]
+        ]}
+      ]
+    },
+    {
+      "id": "database-infra",
+      "title": "Bases de données et infrastructure réseau",
+      "blocks": [
+        { "type": "h3", "text": "Bases de données" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["3306", "MySQL / MariaDB", ""],
+          ["5432", "PostgreSQL", ""],
+          ["1433", "MSSQL", ""],
+          ["1521", "Oracle DB", ""],
+          ["6379", "Redis", "non authentifié par défaut dans beaucoup d'installations — cible facile une fois exposé"],
+          ["27017", "MongoDB", "même piège que Redis — une instance exposée sans mot de passe est une découverte classique de pentest"],
+          ["9200", "Elasticsearch / OpenSearch", "littéralement le port qu'utilise l'indexeur de votre propre soc-server derrière Wazuh"]
+        ]},
+        { "type": "h3", "text": "Infrastructure réseau" },
+        { "type": "table", "headers": ["Port", "Service", "Note"], "rows": [
+          ["123", "NTP", "synchronisation de l'heure"],
+          ["161 / 162", "SNMP / SNMP trap", "supervision d'équipements réseau — la community string « public » par défaut est une faille courante"],
+          ["514", "Syslog", "logs envoyés par le réseau"],
+          ["3478", "STUN/TURN", "vu dans le labo — appel Teams ; traversée de NAT pour les appels voix/vidéo"],
+          ["135", "RPC (Windows)", "utilisé en interne par Windows, aussi historiquement cible d'exploitation à distance"],
+          ["67 / 68", "DHCP", "attribution automatique d'IP"],
+          ["69", "TFTP", "transfert de fichiers simple, sans authentification — utilisé aussi bien pour le boot réseau que pour déposer une charge utile lors d'une attaque"],
+          ["631", "IPP", "impression réseau"],
+          ["5060 / 5061", "SIP", "signalisation VoIP"],
+          ["2375 / 2376", "Docker API", "une API Docker non authentifiée et sans TLS sur le port 2375 est l'une des mauvaises configurations les plus graves et les plus courantes sur les serveurs exposés"]
+        ]}
+      ]
+    },
+    {
+      "id": "suspicious-ports",
+      "title": "Ports qui méritent la suspicion",
+      "blocks": [
+        { "type": "p", "text": "Voir ces ports actifs — surtout en recevant une connexion venant de l'extérieur du réseau, sans raison métier connue — est un signal à investiguer avant d'écarter." },
+        { "type": "table", "headers": ["Port", "Raison"], "rows": [
+          ["4444", "port d'écoute par défaut de Metasploit (reverse shell)"],
+          ["1337 / 31337", "ports classiques de backdoor (« leet » / « eleet »)"],
+          ["6667 / 6697", "IRC — historiquement utilisé comme canal C2 de botnet"]
+        ]},
+        { "type": "callout", "variant": "danger", "title": "La règle générale, au-delà de la liste", "text": "Tout port anormalement élevé (au-dessus de 10000), recevant une connexion entrante venant de l'extérieur, sans aucun service documenté à cet endroit, est suspect par défaut — il n'a pas besoin de figurer sur une liste pour mériter un coup d'œil." },
+        { "type": "callout", "variant": "warning", "title": "Les ports « normaux » cachent aussi des attaques", "text": "DNS (53) et ICMP sont les deux exemples classiques d'un protocole légitime détourné comme canal d'exfiltration/C2 — un port simplement ouvert n'est pas le seul signal ; un volume de trafic inhabituel sur ces ports (comme dans l'exercice STUN, où le volume a confirmé un véritable appel vidéo) mérite aussi attention quand il s'écarte du schéma attendu." }
+      ]
+    }
+  ]
+}

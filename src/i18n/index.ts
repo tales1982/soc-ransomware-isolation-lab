@@ -8,6 +8,7 @@ import enInstall from './locales/en/install.json'
 import enTech from './locales/en/tech.json'
 import enWazuh from './locales/en/wazuh.json'
 import enRules from './locales/en/rules.json'
+import enPorts from './locales/en/ports.json'
 import enThehive from './locales/en/thehive.json'
 import enCortex from './locales/en/cortex.json'
 import enAutomation from './locales/en/automation.json'
@@ -21,6 +22,7 @@ import frInstall from './locales/fr/install.json'
 import frTech from './locales/fr/tech.json'
 import frWazuh from './locales/fr/wazuh.json'
 import frRules from './locales/fr/rules.json'
+import frPorts from './locales/fr/ports.json'
 import frThehive from './locales/fr/thehive.json'
 import frCortex from './locales/fr/cortex.json'
 import frAutomation from './locales/fr/automation.json'
@@ -34,6 +36,7 @@ import ptInstall from './locales/pt/install.json'
 import ptTech from './locales/pt/tech.json'
 import ptWazuh from './locales/pt/wazuh.json'
 import ptRules from './locales/pt/rules.json'
+import ptPorts from './locales/pt/ports.json'
 import ptThehive from './locales/pt/thehive.json'
 import ptCortex from './locales/pt/cortex.json'
 import ptAutomation from './locales/pt/automation.json'
@@ -47,7 +50,7 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    ns: ['common', 'home', 'install', 'tech', 'wazuh', 'rules', 'thehive', 'cortex', 'automation', 'cve', 'exercises', 'about'],
+    ns: ['common', 'home', 'install', 'tech', 'wazuh', 'rules', 'ports', 'thehive', 'cortex', 'automation', 'cve', 'exercises', 'about'],
     defaultNS,
     resources: {
       en: {
@@ -57,6 +60,7 @@ i18n
         tech: enTech,
         wazuh: enWazuh,
         rules: enRules,
+        ports: enPorts,
         thehive: enThehive,
         cortex: enCortex,
         automation: enAutomation,
@@ -71,6 +75,7 @@ i18n
         tech: frTech,
         wazuh: frWazuh,
         rules: frRules,
+        ports: frPorts,
         thehive: frThehive,
         cortex: frCortex,
         automation: frAutomation,
@@ -85,6 +90,7 @@ i18n
         tech: ptTech,
         wazuh: ptWazuh,
         rules: ptRules,
+        ports: ptPorts,
         thehive: ptThehive,
         cortex: ptCortex,
         automation: ptAutomation,

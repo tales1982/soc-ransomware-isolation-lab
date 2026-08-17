@@ -9,6 +9,7 @@
     "technologies": "Technologies",
     "wazuh": "Wazuh",
     "rules": "Rules",
+    "ports": "Ports",
     "thehive": "TheHive",
     "cortex": "Cortex",
     "automation": "Automation & Endpoints",

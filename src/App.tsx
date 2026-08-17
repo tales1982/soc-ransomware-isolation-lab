@@ -8,6 +8,7 @@ import Installation from './pages/Installation'
 import Technologies from './pages/Technologies'
 import Wazuh from './pages/Wazuh'
 import Rules from './pages/Rules'
+import Ports from './pages/Ports'
 import TheHive from './pages/TheHive'
 import Cortex from './pages/Cortex'
 import Automation from './pages/Automation'
@@ -39,6 +40,7 @@ function App() {
         <Route path="/technologies" element={<Technologies />} />
         <Route path="/wazuh" element={<Wazuh />} />
         <Route path="/rules" element={<Rules />} />
+        <Route path="/ports" element={<Ports />} />
         <Route path="/thehive" element={<TheHive />} />
         <Route path="/cortex" element={<Cortex />} />
         <Route path="/automation" element={<Automation />} />

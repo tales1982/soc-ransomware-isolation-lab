@@ -1,0 +1,102 @@
+{
+  "title": "Portas de Referência",
+  "subtitle": "As portas de rede mais comuns em relatórios de SOC — o que cada uma faz, e quando ela é motivo real de atenção.",
+  "intro": [
+    { "type": "p", "text": "Uma referência rápida pra consultar durante a triagem de um alerta, sem precisar procurar toda vez qual serviço roda em qual porta. As marcadas como \"visto no lab\" já apareceram de verdade em algum exercício ou investigação deste laboratório — o resto é o conjunto que qualquer analista de SOC acaba decorando de tanto ver." },
+    { "type": "callout", "variant": "tip", "title": "Como usar isso no Discover", "text": "Qualquer porta desta lista pode ser buscada direto no Threat Hunting/Discover com data.dest_port: 445 (ou o número que for) — combine com agent.name ou data.src_ip pra restringir o resultado." }
+  ],
+  "sections": [
+    {
+      "id": "web-remote",
+      "title": "Web e acesso remoto / administração",
+      "blocks": [
+        { "type": "h3", "text": "Web" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["80", "HTTP", "tráfego web sem criptografia"],
+          ["443", "HTTPS", "visto no lab — a porta mais comum de todas, dashboard do Wazuh, chamadas de vídeo, etc."],
+          ["8080 / 8443", "HTTP/HTTPS alternativo", "proxies, painéis de administração, apps web internas"]
+        ]},
+        { "type": "h3", "text": "Acesso remoto e administração" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["22", "SSH", "visto no lab — testes de scan e força bruta contra o victim-linux"],
+          ["23", "Telnet", "login remoto sem criptografia — ver isso ativo hoje já é sinal de alerta"],
+          ["3389", "RDP", "Área de Trabalho Remota do Windows — alvo clássico de brute-force e ransomware"],
+          ["5900", "VNC", "outro protocolo de acesso remoto gráfico"],
+          ["5985 / 5986", "WinRM", "gerenciamento remoto do Windows (PowerShell remoting) — usado tanto por administradores quanto em movimento lateral"]
+        ]}
+      ]
+    },
+    {
+      "id": "files-mail-directory",
+      "title": "Arquivos, e-mail e diretório / autenticação",
+      "blocks": [
+        { "type": "h3", "text": "Arquivos e compartilhamento" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["445", "SMB", "visto no lab — apareceu no scan do kali-vm contra o victim-linux; alvo clássico de worms/ransomware (ex: WannaCry)"],
+          ["139", "NetBIOS Session", "SMB \"antigo\", geralmente anda junto com a 445"],
+          ["21", "FTP", "transferência de arquivos sem criptografia"],
+          ["990", "FTPS", "FTP com TLS"],
+          ["2049", "NFS", "compartilhamento de arquivos entre servidores Linux/Unix"]
+        ]},
+        { "type": "h3", "text": "E-mail" },
+        { "type": "table", "headers": ["Porta", "Serviço"], "rows": [
+          ["25", "SMTP (envio)"],
+          ["587", "SMTP submission (envio autenticado, com TLS)"],
+          ["993", "IMAPS"],
+          ["995", "POP3S"],
+          ["143 / 110", "IMAP / POP3 sem criptografia"]
+        ]},
+        { "type": "h3", "text": "Diretório e autenticação" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["389", "LDAP", "consulta de diretório (Active Directory)"],
+          ["636", "LDAPS", "LDAP com TLS"],
+          ["88", "Kerberos", "autenticação de domínio Windows — alvo de ataques como Kerberoasting"],
+          ["53", "DNS", "resolução de nomes — também usada como canal de exfiltração de dados (túnel DNS)"]
+        ]}
+      ]
+    },
+    {
+      "id": "database-infra",
+      "title": "Banco de dados e infraestrutura de rede",
+      "blocks": [
+        { "type": "h3", "text": "Banco de dados" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["3306", "MySQL / MariaDB", ""],
+          ["5432", "PostgreSQL", ""],
+          ["1433", "MSSQL", ""],
+          ["1521", "Oracle DB", ""],
+          ["6379", "Redis", "sem autenticação por padrão em muitas instalações — alvo fácil quando exposto"],
+          ["27017", "MongoDB", "mesma pegadinha do Redis — instância exposta sem senha é achado clássico de pentest"],
+          ["9200", "Elasticsearch / OpenSearch", "é literalmente a porta que o indexador do seu próprio soc-server usa por trás do Wazuh"]
+        ]},
+        { "type": "h3", "text": "Infraestrutura de rede" },
+        { "type": "table", "headers": ["Porta", "Serviço", "Nota"], "rows": [
+          ["123", "NTP", "sincronização de horário"],
+          ["161 / 162", "SNMP / SNMP trap", "monitoramento de equipamentos de rede — community string padrão (\"public\") é falha comum"],
+          ["514", "Syslog", "logs enviados por rede"],
+          ["3478", "STUN/TURN", "visto no lab — chamada de vídeo do Teams; travessia de NAT em chamadas de voz/vídeo"],
+          ["135", "RPC (Windows)", "usado internamente pelo Windows, também historicamente alvo de exploração remota"],
+          ["67 / 68", "DHCP", "atribuição automática de IP"],
+          ["69", "TFTP", "transferência de arquivo simples, sem autenticação — usado tanto em boot de rede quanto pra estagiar payload em ataques"],
+          ["631", "IPP", "impressão em rede"],
+          ["5060 / 5061", "SIP", "sinalização de VoIP"],
+          ["2375 / 2376", "Docker API", "API do Docker exposta sem TLS/autenticação na 2375 é uma das falhas de exposição mais graves e comuns em servidores mal configurados"]
+        ]}
+      ]
+    },
+    {
+      "id": "suspicious-ports",
+      "title": "Portas que merecem desconfiança",
+      "blocks": [
+        { "type": "p", "text": "Ver estas portas ativas — sobretudo recebendo conexão de fora da rede, sem motivo de negócio conhecido — é sinal de investigar antes de descartar." },
+        { "type": "table", "headers": ["Porta", "Motivo"], "rows": [
+          ["4444", "porta padrão de listener do Metasploit (shell reversa)"],
+          ["1337 / 31337", "clássicas de backdoor (\"leet\" / \"eleet\")"],
+          ["6667 / 6697", "IRC — historicamente usado como canal de C2 de botnet"]
+        ]},
+        { "type": "callout", "variant": "danger", "title": "A regra geral, além da lista", "text": "Qualquer porta alta e incomum (acima de 10000), recebendo conexão de fora, sem nenhum serviço documentado rodando ali, é suspeita por padrão — não precisa estar em nenhuma lista pra merecer uma olhada." },
+        { "type": "callout", "variant": "warning", "title": "Portas \"normais\" também escondem ataque", "text": "DNS (53) e ICMP são os dois exemplos clássicos de protocolo legítimo abusado como canal de exfiltração/C2 — porta abrindo sozinha não é o único sinal; volume de tráfego fora do padrão nessas portas (como vimos no exercício do STUN, onde o volume de dados confirmou uma chamada de vídeo real) também merece atenção quando foge do esperado." }
+      ]
+    }
+  ]
+}
