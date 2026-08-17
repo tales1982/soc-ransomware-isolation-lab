@@ -7,6 +7,7 @@ import enHome from './locales/en/home.json'
 import enInstall from './locales/en/install.json'
 import enTech from './locales/en/tech.json'
 import enWazuh from './locales/en/wazuh.json'
+import enRules from './locales/en/rules.json'
 import enThehive from './locales/en/thehive.json'
 import enCortex from './locales/en/cortex.json'
 import enAutomation from './locales/en/automation.json'
@@ -19,6 +20,7 @@ import frHome from './locales/fr/home.json'
 import frInstall from './locales/fr/install.json'
 import frTech from './locales/fr/tech.json'
 import frWazuh from './locales/fr/wazuh.json'
+import frRules from './locales/fr/rules.json'
 import frThehive from './locales/fr/thehive.json'
 import frCortex from './locales/fr/cortex.json'
 import frAutomation from './locales/fr/automation.json'
@@ -31,6 +33,7 @@ import ptHome from './locales/pt/home.json'
 import ptInstall from './locales/pt/install.json'
 import ptTech from './locales/pt/tech.json'
 import ptWazuh from './locales/pt/wazuh.json'
+import ptRules from './locales/pt/rules.json'
 import ptThehive from './locales/pt/thehive.json'
 import ptCortex from './locales/pt/cortex.json'
 import ptAutomation from './locales/pt/automation.json'
@@ -44,7 +47,7 @@ i18n
   .use(LanguageDetector)
   .use(initReactI18next)
   .init({
-    ns: ['common', 'home', 'install', 'tech', 'wazuh', 'thehive', 'cortex', 'automation', 'cve', 'exercises', 'about'],
+    ns: ['common', 'home', 'install', 'tech', 'wazuh', 'rules', 'thehive', 'cortex', 'automation', 'cve', 'exercises', 'about'],
     defaultNS,
     resources: {
       en: {
@@ -53,6 +56,7 @@ i18n
         install: enInstall,
         tech: enTech,
         wazuh: enWazuh,
+        rules: enRules,
         thehive: enThehive,
         cortex: enCortex,
         automation: enAutomation,
@@ -66,6 +70,7 @@ i18n
         install: frInstall,
         tech: frTech,
         wazuh: frWazuh,
+        rules: frRules,
         thehive: frThehive,
         cortex: frCortex,
         automation: frAutomation,
@@ -79,6 +84,7 @@ i18n
         install: ptInstall,
         tech: ptTech,
         wazuh: ptWazuh,
+        rules: ptRules,
         thehive: ptThehive,
         cortex: ptCortex,
         automation: ptAutomation,

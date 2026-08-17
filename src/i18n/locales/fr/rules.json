@@ -1,0 +1,149 @@
+{
+  "title": "Règles",
+  "subtitle": "Comment Wazuh et Suricata décident chacun ce qui devient une alerte — et comment écrire, appliquer et vérifier une nouvelle règle dans chacun d'eux.",
+  "intro": [
+    { "type": "p", "text": "Deux règles personnalisées dans Wazuh (100101 et 100200) et une signature personnalisée dans Suricata (sid 9000001) portent l'essentiel de la détection de ce laboratoire. Cette page rassemble, en un seul endroit, comment chaque moteur décide ce qui devient une alerte, la marche à suivre réelle pour écrire une nouvelle règle dans chacun, et comment vérifier ensuite — dans le tableau de bord et en ligne de commande — qu'elle est bien chargée." },
+    { "type": "callout", "variant": "info", "title": "Pourquoi cette page existe séparément de la page Wazuh", "text": "La page Wazuh couvre déjà l'enquête complète derrière chaque règle : pourquoi la 100200 existe, le bug de timing de 90 secondes, la lacune de détection de scan de port. Cette page est l'inverse — un guide de référence direct, sans le récit d'enquête, pour quand il suffit de se rappeler « comment j'ajoute une nouvelle règle » sans tout relire." }
+  ],
+  "sections": [
+    {
+      "id": "how-it-works",
+      "title": "Comment fonctionnent les règles : deux moteurs différents",
+      "blocks": [
+        { "type": "p", "text": "Le laboratoire fait tourner deux moteurs de détection complètement séparés, et chacun décide « ceci est une alerte » d'une manière différente :" },
+        { "type": "table", "headers": ["", "Wazuh", "Suricata"], "rows": [
+          ["Ce qu'il regarde", "Les logs et événements déjà collectés depuis les agents — FIM, auditd, journal d'événements Windows, et même le eve.json de Suricata lui-même", "Les paquets réseau bruts, capturés en direct sur l'interface de chaque sonde"],
+          ["Quand il décide", "Après que l'événement a déjà été généré par une autre source (syscheckd, auditd, etc.)", "En temps réel, directement sur le trafic traversant l'interface"],
+          ["Où vivent les règles", "Un seul fichier central sur le manager : /var/ossec/etc/rules/local_rules.xml", "Un fichier local.rules distinct, sur chaque sonde individuellement"],
+          ["Syntaxe", "XML", "Une ligne de texte par signature, style Snort"]
+        ]},
+        { "type": "callout", "variant": "warning", "title": "Le piège qui surprend tout le monde une fois", "text": "Une alerte Suricata (comme celle du scan de port) ne devient pas sa propre règle à l'intérieur de Wazuh — elle passe par la règle générique 86601, qui enveloppe N'IMPORTE QUELLE alerte venant du eve.json. Le texte réel de la signature vit à l'intérieur de l'alerte elle-même, dans le champ data.alert.signature, pas dans la description de la règle 86601. C'est pourquoi la signature de scan de port n'apparaît jamais dans l'écran « Rules » de Wazuh, seulement la 86601 générique." }
+      ]
+    },
+    {
+      "id": "wazuh-rule-anatomy",
+      "title": "Anatomie d'une règle Wazuh",
+      "blocks": [
+        { "type": "p", "text": "Les deux vraies règles de ce laboratoire couvrent les deux façons valides de filtrer un événement — par champ structuré, ou par texte libre :" },
+        { "type": "code", "lang": "xml", "code": "<group name=\"local,media_isolation,\">\n  <rule id=\"100200\" level=\"12\">\n    <if_sid>550,553,554</if_sid>\n    <field name=\"file\">^/srv/media</field>\n    <description>Media storage node: file integrity change detected in /srv/media (possible ransomware behavior)</description>\n    <group>media_isolation,</group>\n  </rule>\n</group>" },
+        { "type": "p", "text": "Celle-ci corrèle trois règles FIM déjà intégrées à Wazuh (550 modifié, 553 supprimé, 554 ajouté) et les restreint pour ne se déclencher que lorsque le champ structuré file correspond au chemin protégé — filtrage par <field>." },
+        { "type": "code", "lang": "xml", "code": "<rule id=\"100101\" level=\"3\">\n  <if_sid>86601</if_sid>\n  <match>Ethertype unknown</match>\n  <description>Suricata: Ethertype unknown - downgraded (known noise from home network IoT devices)</description>\n  <group>suricata_tuning,</group>\n</rule>" },
+        { "type": "p", "text": "Celle-ci dérive de la règle générique pour toute alerte Suricata (86601) et cherche un texte libre n'importe où dans le log — filtrage par <match>. Direction opposée de la 100200 : au lieu d'escalader, elle rabaisse la sévérité d'un bruit déjà identifié." },
+        { "type": "h3", "text": "Les éléments qui comptent" },
+        { "type": "ul", "items": [
+          "id — au-dessus de 100000 ; cette plage est réservée aux règles personnalisées, en dessous c'est le ruleset d'usine de Wazuh.",
+          "level — de 0 à 16, décide la sévérité ; le niveau 12+ tend à être ce qui déclenche la Réponse Active dans ce laboratoire.",
+          "if_sid — s'enchaîne à partir d'une règle existante (ex : 550/553/554 sont les règles FIM génériques déjà intégrées).",
+          "field vs match — field utilise un champ structuré de l'événement (ex : le chemin du fichier) ; match cherche un texte libre n'importe où dans le log.",
+          "group — l'étiquette qui relie ensuite la règle à un tableau de bord, une requête sauvegardée, ou une condition de Réponse Active."
+        ]}
+      ]
+    },
+    {
+      "id": "add-wazuh-rule",
+      "title": "Comment ajouter une nouvelle règle dans Wazuh",
+      "blocks": [
+        { "type": "p", "text": "Marche à suivre réelle, exécutée directement sur soc-server (où vit le manager) :" },
+        { "type": "ol", "items": [
+          "Sauvegarder le fichier avant d'y toucher.",
+          "Choisir un ID libre et confirmer qu'il n'existe pas déjà.",
+          "Éditer en tant que root.",
+          "Toujours ajouter la nouvelle règle à la fin du fichier, dans son propre bloc <group>...</group> — jamais l'insérer par recherche-remplacement automatisée.",
+          "Enregistrer et redémarrer le manager.",
+          "Attendre que le moteur ait vraiment fini de recharger avant de tester."
+        ]},
+        { "type": "code", "lang": "bash", "code": "sudo cp /var/ossec/etc/rules/local_rules.xml /var/ossec/etc/rules/local_rules.xml.bak\ngrep -c 'id=\"100201\"' /var/ossec/etc/rules/local_rules.xml   # confirme que l'ID est libre\nsudo nano /var/ossec/etc/rules/local_rules.xml\nsudo systemctl restart wazuh-manager" },
+        { "type": "callout", "variant": "danger", "title": "La leçon des 90 secondes qui a déjà coûté une journée entière de débogage", "text": "Sur le matériel à 2 cœurs de ce laboratoire, le moteur de règles prend jusqu'à 90 secondes pour recharger complètement après un systemctl restart wazuh-manager. Tester avant la fin de cette fenêtre donne l'impression fausse que « cette règle ne fonctionne pas » — cela a été confondu avec un bug de syntaxe pendant presque une journée entière." },
+        { "type": "callout", "variant": "warning", "title": "Pourquoi ne jamais éditer via un script/remplacement automatisé", "text": "Un str.replace() ciblant </group> peut silencieusement toucher la mauvaise balise de groupe imbriquée et corrompre tout le fichier sans aucun avertissement — c'est arrivé deux fois dans ce laboratoire. Éditer manuellement, ou toujours ajouter à la fin du fichier." },
+        { "type": "h3", "text": "Valider avant de faire confiance" },
+        { "type": "ul", "items": [
+          "Règle basée sur une ligne de log (ex : sshd, sudo) : sudo /var/ossec/bin/wazuh-logtest, coller une ligne d'exemple, confirmer qu'elle correspond à l'ID attendu.",
+          "Aucune ligne de log à simuler (FIM, rootcheck) : déclencher l'événement réel (ex : modifier un fichier sur le chemin surveillé) et vérifier dans Threat Hunting."
+        ]}
+      ]
+    },
+    {
+      "id": "view-wazuh-rules",
+      "title": "Comment voir les règles dans Wazuh",
+      "blocks": [
+        { "type": "p", "text": "Deux façons de confirmer qu'une règle est chargée et fonctionne : via le tableau de bord, ou directement en ligne de commande." },
+        { "type": "h3", "text": "Dans le tableau de bord" },
+        { "type": "ol", "items": [
+          "Server Management → Rules.",
+          "Cliquer sur « Custom rules » (en haut à droite) pour filtrer uniquement les règles que vous avez écrites, sans les milliers de règles d'usine mélangées.",
+          "Ou utiliser la recherche libre : par ID (100200), par groupe (media_isolation), ou par un mot de la description."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "Attention à ne pas confondre « règle d'exemple » et « votre règle »", "text": "Chaque local_rules.xml fraîchement installé vient déjà avec une règle d'exemple d'usine (ID 100001, « sshd: authentication failed from IP 1.1.1.1 »). Elle apparaît aussi dans le filtre « Custom rules », mais elle n'a jamais été écrite ni utilisée intentionnellement — utile de savoir la distinguer de ce qui est vraiment à vous." },
+        { "type": "h3", "text": "Voir l'alerte réellement déclenchée (Threat Hunting / Discover)" },
+        { "type": "code", "code": "rule.id: \"100200\"\nrule.groups: \"media_isolation\"\nagent.name: \"victim-linux\"" },
+        { "type": "h3", "text": "En ligne de commande, directement sur soc-server" },
+        { "type": "code", "lang": "bash", "code": "grep -B2 -A2 \"100200\" /var/ossec/etc/rules/local_rules.xml" }
+      ]
+    },
+    {
+      "id": "suricata-rule-anatomy",
+      "title": "Anatomie d'une signature Suricata",
+      "blocks": [
+        { "type": "p", "text": "Contrairement au XML de Wazuh, une signature Suricata est une seule ligne de texte, syntaxe style Snort. La seule règle personnalisée de ce laboratoire — le détecteur de scan de port, répliqué sur les 8 sondes :" },
+        { "type": "code", "code": "alert tcp any any -> $HOME_NET any (msg:\"LOCAL Possible TCP Port Scan Detected\"; flags:S; threshold: type both, track by_src, count 20, seconds 60; classtype:attempted-recon; sid:9000001; rev:1;)" },
+        { "type": "h3", "text": "Les éléments qui comptent" },
+        { "type": "ul", "items": [
+          "action — alert (log dans eve.json) est la seule utilisée ici ; drop/reject existent aussi pour des configurations de blocage en ligne, non utilisées dans ce laboratoire.",
+          "protocole et adresses — tcp any any -> $HOME_NET any : n'importe quelle source, n'importe quel port, contre le réseau local, n'importe quel port de destination.",
+          "options entre parenthèses — msg est le texte qui apparaît comme data.alert.signature dans Wazuh ; flags:S restreint aux paquets SYN uniquement ; threshold est la vraie astuce (voir plus bas).",
+          "sid — doit être unique ; la convention Suricata/Snort elle-même réserve les sid au-dessus de 1 000 000 pour les règles locales/personnalisées (le ruleset ET Open utilise la plage en dessous).",
+          "classtype / rev — métadonnées de catégorie et de révision, ne change pas si la règle se déclenche."
+        ]},
+        { "type": "callout", "variant": "tip", "title": "threshold, c'est ce qui sépare « règle utile » de « règle qui remplit le disque »", "text": "Sans threshold, un scan SYN de 1000 ports générerait 1000 alertes quasi identiques en quelques secondes. « type both, track by_src, count 20, seconds 60 » condense tout ça en une seule ligne d'alerte par fenêtre de 60 secondes, par IP source." }
+      ]
+    },
+    {
+      "id": "add-suricata-rule",
+      "title": "Comment ajouter une nouvelle règle dans Suricata",
+      "blocks": [
+        { "type": "p", "text": "Contrairement à Wazuh, il n'y a pas de fichier central unique ici — chacune des 8 sondes a son propre local.rules, et une nouvelle règle ne protège que la machine où elle a été répliquée manuellement." },
+        { "type": "ol", "items": [
+          "Confirmer le chemin réel du fichier de règles sur cette machine précise — ce n'est pas toujours le même chemin : /etc/suricata/rules/local.rules sur la plupart, mais /var/lib/suricata/rules/local.rules sur tales-desktop (le default-rule-path change selon la version/méthode d'installation de Suricata).",
+          "Écrire la ligne de signature dans local.rules.",
+          "S'assurer que local.rules est listé sous rule-files: dans suricata.yaml — si le fichier existe sur le disque mais n'est pas dans cette liste, il est silencieusement ignoré, sans aucune erreur.",
+          "Valider la syntaxe AVANT de redémarrer le service.",
+          "Redémarrer le service — le bon mécanisme dépend du système d'exploitation."
+        ]},
+        { "type": "code", "lang": "bash", "code": "sudo nano /etc/suricata/rules/local.rules\nsudo suricata -T -c /etc/suricata/suricata.yaml -v   # chercher \"0 rule files failed\"\nsudo systemctl restart suricata                       # Linux" },
+        { "type": "table", "headers": ["Système", "Comment le redémarrer vraiment"], "rows": [
+          ["Linux (4 sondes)", "sudo systemctl restart suricata — le chemin direct, sans piège."],
+          ["Windows (2 sondes)", "Le service natif (--service-install) meurt tout seul quelques secondes après le démarrage. Une tâche du Planificateur de tâches est utilisée à la place (AtStartup, SYSTEM) — Stop-ScheduledTask + Start-ScheduledTask pour le recycler."],
+          ["macOS (1 sonde)", "Pas de support brew services — supervision via LaunchDaemon : sudo launchctl kickstart -k system/com.oisf.suricata."]
+        ]},
+        { "type": "callout", "variant": "warning", "title": "Répéter sur chaque sonde, pas seulement une", "text": "Une nouvelle règle écrite uniquement dans le local.rules de victim-linux ne protège pas tales-desktop ni aucune autre sonde — le même texte (en ajustant le chemin si nécessaire) doit être répliqué manuellement sur les 8 sondes, une par une." }
+      ]
+    },
+    {
+      "id": "view-suricata-rules",
+      "title": "Comment voir les règles dans Suricata",
+      "blocks": [
+        { "type": "h3", "text": "Directement sur la sonde — la source de vérité" },
+        { "type": "code", "lang": "bash", "code": "cat /etc/suricata/rules/local.rules\n# ou, si le chemin est différent sur cette machine :\ncat /var/lib/suricata/rules/local.rules" },
+        { "type": "p", "text": "C'est le seul endroit où le texte complet de la règle (threshold, flags, sid) est réellement visible. Wazuh ne montre jamais ce texte — seulement le résultat de son déclenchement." },
+        { "type": "h3", "text": "Via Wazuh, en regardant les alertes déjà générées" },
+        { "type": "p", "text": "Comme il n'existe pas d'écran « Rules » dédié à Suricata dans Wazuh, la voie est de regarder les alertes déjà déclenchées dans Discover/Threat Hunting :" },
+        { "type": "code", "code": "rule.groups: \"suricata\"\nnot rule.id: \"100101\"" },
+        { "type": "callout", "variant": "tip", "title": "Découvrir des signatures sans connaître le nom exact", "text": "Cliquer sur le champ data.alert.signature dans la liste des champs à gauche de Discover affiche les « Top 5 values » de ce champ sur la période sélectionnée — le moyen le plus rapide de découvrir quelles signatures (y compris les vôtres, personnalisées) se sont déjà déclenchées, sans deviner le nom au préalable." }
+      ]
+    },
+    {
+      "id": "cheatsheet",
+      "title": "Référence rapide : Wazuh vs Suricata",
+      "blocks": [
+        { "type": "table", "headers": ["Aspect", "Wazuh", "Suricata"], "rows": [
+          ["Fichier de règles", "/var/ossec/etc/rules/local_rules.xml (central, un seul sur le manager)", "local.rules (par sonde, le chemin peut varier selon la machine)"],
+          ["Plage d'ID réservée aux règles personnalisées", "100000+", "sid au-dessus de 1 000 000"],
+          ["Valider la syntaxe avant d'appliquer", "wazuh-logtest, ou déclencher l'événement réel pour les règles sans ligne de log", "suricata -T -c suricata.yaml -v"],
+          ["Appliquer le changement", "systemctl restart wazuh-manager (~90s de rechargement sur ce matériel)", "Varie selon l'OS : systemctl (Linux), Planificateur de tâches (Windows), LaunchDaemon (macOS)"],
+          ["Où le voir dans le tableau de bord Wazuh", "Server Management → Rules → bouton « Custom rules »", "Pas d'écran dédié — apparaît via la règle générique 86601, texte réel dans le champ data.alert.signature"],
+          ["Où le voir en ligne de commande", "grep dans local_rules.xml", "cat sur local.rules de chaque sonde, une par une"]
+        ]}
+      ]
+    }
+  ]
+}

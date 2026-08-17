@@ -8,6 +8,7 @@ const navItems = [
   { to: '/installation', key: 'installation' },
   { to: '/technologies', key: 'technologies' },
   { to: '/wazuh', key: 'wazuh' },
+  { to: '/rules', key: 'rules' },
   { to: '/thehive', key: 'thehive' },
   { to: '/cortex', key: 'cortex' },
   { to: '/automation', key: 'automation' },

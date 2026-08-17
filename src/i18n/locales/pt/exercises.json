@@ -16,7 +16,7 @@
       "kind": "defensive",
       "items": [
         { "id": "ex1", "title": "Encontre o alerta mais recente do victim-linux", "difficulty": "easy", "time": "5 min", "text": "No Discover ou Threat Hunting, encontre o alerta mais recente do agente victim-linux, qualquer que seja a regra. Identifique rule.id, rule.level, e resuma em uma frase o que rule.description diz que aconteceu." },
-        { "id": "ex2", "title": "Conte os alertas críticos no grupo media_isolation", "difficulty": "easy", "time": "5 min", "text": "Quantos alertas com rule.level >= 12 e rule.groups:\"media_isolation\" existem nas últimas 24 horas? Se zero, amplie para os últimos 30 dias e reporte o número real, mais os timestamps mais antigo e mais recente." },
+        { "id": "ex2", "title": "Conte os alertas críticos no grupo media_isolation", "difficulty": "easy", "time": "5 min", "text": "Quantos alertas com rule.level >= 12 e rule.groups:\"media_isolation\" existem nos últimos 30 dias? Reporte o número real, mais os timestamps mais antigo e mais recente." },
         { "id": "ex3", "title": "Qual sensor Suricata fala mais?", "difficulty": "easy", "time": "5 min", "text": "Abra o dashboard network-security e confira o painel network-alerts-by-sensor. Qual dos 8 sensores gerou mais alertas nos últimos 30 dias? Isso é esperado, dado o padrão de uso de cada máquina?" }
       ]
     },

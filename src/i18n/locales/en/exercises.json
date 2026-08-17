@@ -16,7 +16,7 @@
       "kind": "defensive",
       "items": [
         { "id": "ex1", "title": "Find the most recent alert from victim-linux", "difficulty": "easy", "time": "5 min", "text": "In Discover or Threat Hunting, find the most recent alert from the victim-linux agent, whatever the rule. Identify rule.id, rule.level, and summarize what rule.description says happened, in one sentence." },
-        { "id": "ex2", "title": "Count critical alerts in the media_isolation group", "difficulty": "easy", "time": "5 min", "text": "How many alerts with rule.level >= 12 and rule.groups:\"media_isolation\" exist in the last 24 hours? If zero, widen to the last 30 days and report the real number, plus the oldest and newest timestamps." },
+        { "id": "ex2", "title": "Count critical alerts in the media_isolation group", "difficulty": "easy", "time": "5 min", "text": "How many alerts with rule.level >= 12 and rule.groups:\"media_isolation\" exist in the last 30 days? Report the real number, plus the oldest and newest timestamps." },
         { "id": "ex3", "title": "Which Suricata sensor talks the most?", "difficulty": "easy", "time": "5 min", "text": "Open the network-security dashboard and check the network-alerts-by-sensor panel. Which of the 8 sensors generated the most alerts in the last 30 days? Is that expected, given each machine's usage pattern?" }
       ]
     },

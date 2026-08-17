@@ -16,7 +16,7 @@
       "kind": "defensive",
       "items": [
         { "id": "ex1", "title": "Trouver l'alerte la plus récente de victim-linux", "difficulty": "easy", "time": "5 min", "text": "Dans Discover ou Threat Hunting, trouver l'alerte la plus récente de l'agent victim-linux, quelle que soit la règle. Identifier rule.id, rule.level, et résumer en une phrase ce que dit rule.description." },
-        { "id": "ex2", "title": "Compter les alertes critiques du groupe media_isolation", "difficulty": "easy", "time": "5 min", "text": "Combien d'alertes avec rule.level >= 12 et rule.groups:\"media_isolation\" existent dans les dernières 24 heures ? Si zéro, élargir aux 30 derniers jours et rapporter le vrai nombre, plus les horodatages le plus ancien et le plus récent." },
+        { "id": "ex2", "title": "Compter les alertes critiques du groupe media_isolation", "difficulty": "easy", "time": "5 min", "text": "Combien d'alertes avec rule.level >= 12 et rule.groups:\"media_isolation\" existent dans les 30 derniers jours ? Rapportez le vrai nombre, plus les horodatages le plus ancien et le plus récent." },
         { "id": "ex3", "title": "Quelle sonde Suricata parle le plus ?", "difficulty": "easy", "time": "5 min", "text": "Ouvrir le tableau de bord network-security et vérifier le panneau network-alerts-by-sensor. Laquelle des 8 sondes a généré le plus d'alertes dans les 30 derniers jours ? Est-ce attendu, compte tenu du schéma d'usage de chaque machine ?" }
       ]
     },
